@@ -1,210 +1,302 @@
 import { useState } from 'react';
-import { ArrowRight, ClipboardList, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowRight, CalendarClock, ClipboardList, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { articleProfileExample, profileOptions } from '../utils/recommendationEngine';
+import { profileOptions } from '../utils/recommendationEngine';
 
-export default function ProfileQuiz({ setPreferences }) {
+const problemsByArea = {
+  Wajah: ['Komedo', 'Kulit kusam', 'Kulit berminyak', 'Wajah lelah'],
+  Rambut: ['Rambut kering', 'Rambut rusak', 'Rambut bercabang'],
+  'Kuku tangan': ['Kuku kusam'],
+  'Kuku kaki': ['Kaki kering'],
+};
+
+const goalsByArea = {
+  Wajah: ['Membersihkan wajah', 'Nutrisi kulit', 'Relaksasi wajah'],
+  Rambut: ['Nutrisi rambut', 'Penguatan rambut', 'Melembutkan rambut'],
+  'Kuku tangan': ['Kebersihan kuku'],
+  'Kuku kaki': ['Kesehatan kaki'],
+};
+
+function todayInputValue() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 10);
+}
+
+export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   const navigate = useNavigate();
-  const [area, setArea] = useState(articleProfileExample.area);
-  const [skinType, setSkinType] = useState(articleProfileExample.skinType);
-  const [problems, setProblems] = useState(articleProfileExample.problems);
-  const [goal, setGoal] = useState(articleProfileExample.goal);
-  const [history, setHistory] = useState(articleProfileExample.history);
+  const loggedCustomer = currentUser?.role === 'customer' ? currentUser : null;
+  const [customer, setCustomer] = useState({
+    name: loggedCustomer?.fullName || '',
+    phone: loggedCustomer?.phone || '',
+    visitDate: todayInputValue(),
+    visitTime: '10:00',
+    notes: '',
+  });
+  const [area, setArea] = useState('Wajah');
+  const [skinType, setSkinType] = useState('');
+  const [problems, setProblems] = useState([]);
+  const [goal, setGoal] = useState('');
+  const [history, setHistory] = useState('Belum pernah facial');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const setArticleExample = () => {
-    setArea(articleProfileExample.area);
-    setSkinType(articleProfileExample.skinType);
-    setProblems(articleProfileExample.problems);
-    setGoal(articleProfileExample.goal);
-    setHistory(articleProfileExample.history);
+  const visibleProblems = problemsByArea[area] || profileOptions.problems;
+  const visibleGoals = goalsByArea[area] || profileOptions.goals;
+
+  const updateCustomer = (field, value) => {
+    setCustomer((current) => ({ ...current, [field]: value }));
   };
 
-  const handleProblemChange = (e) => {
-    const value = e.target.value;
-    if (e.target.checked) {
+  const handleAreaChange = (nextArea) => {
+    setArea(nextArea);
+    setProblems([]);
+    setGoal('');
+    if (nextArea !== 'Wajah') {
+      setSkinType('');
+    }
+  };
+
+  const handleProblemChange = (event) => {
+    const value = event.target.value;
+    if (event.target.checked) {
       setProblems((current) => Array.from(new Set([...current, value])));
     } else {
       setProblems((current) => current.filter((problem) => problem !== value));
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setPreferences({
-      area,
-      skinType: area === 'Wajah' ? skinType : '',
-      problems,
-      goal,
-      history,
-    });
-    navigate('/recommendations');
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (area === 'Wajah' && !skinType) {
+      setError('Pilih jenis kulit wajah pelanggan terlebih dahulu.');
+      return;
+    }
+
+    if (!problems.length) {
+      setError('Pilih minimal satu kondisi atau masalah utama pelanggan.');
+      return;
+    }
+
+    if (!goal) {
+      setError('Pilih tujuan perawatan pelanggan.');
+      return;
+    }
+
+    try {
+      setError('');
+      setIsSubmitting(true);
+      await onCreateConsultation({
+        customer: {
+          ...customer,
+          name: customer.name.trim(),
+          phone: customer.phone.trim(),
+          email: loggedCustomer?.email || '',
+        },
+        preferences: {
+          area,
+          skinType: area === 'Wajah' ? skinType : '',
+          problems,
+          goal,
+          history,
+          notes: customer.notes.trim(),
+        },
+      });
+      navigate('/recommendations');
+    } catch (submitError) {
+      setError(submitError.message || 'Konsultasi gagal disimpan.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="container" style={{ padding: '56px 24px 72px', maxWidth: '1120px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '32px', alignItems: 'flex-end', marginBottom: '40px' }}>
-        <div style={{ maxWidth: '680px' }}>
-          <p style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1.6px', color: 'var(--color-primary)', fontWeight: 700, marginBottom: '12px' }}>
-            Konsultasi Jharmy Salon
-          </p>
-          <h1 style={{ fontSize: '2.8rem', marginBottom: '14px' }}>Profil Kebutuhan Pelanggan</h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '1rem', lineHeight: 1.7 }}>
-            Isi kondisi utama pelanggan sebelum treatment. Jawaban ini akan dicocokkan dengan atribut layanan salon seperti pada data penelitian.
+    <div className="container page-space">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Konsultasi pelanggan</p>
+          <h1>Data Kebutuhan Treatment</h1>
+          <p>
+            Isi data pelanggan dan kondisi perawatan agar salon dapat memberi
+            rekomendasi serta menindaklanjuti jadwal kunjungan.
           </p>
         </div>
-        <button type="button" onClick={setArticleExample} className="btn-secondary" style={{ gap: '8px', display: 'inline-flex', alignItems: 'center' }}>
-          <RotateCcw size={16} />
-          Contoh Artikel
-        </button>
+        {loggedCustomer && (
+          <span className="user-chip">
+            Konsultasi sebagai {loggedCustomer.fullName}
+          </span>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: '32px', alignItems: 'start' }}>
-        <aside style={{ position: 'sticky', top: '24px' }}>
-          <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', minHeight: '620px', backgroundColor: '#E8E5E1' }}>
-            <img
-              src="https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=900"
-              alt="Perlengkapan perawatan salon"
-              style={{ width: '100%', height: '620px', objectFit: 'cover' }}
-            />
-            <div style={{ position: 'absolute', left: '24px', right: '24px', bottom: '24px', backgroundColor: 'rgba(255,255,255,0.94)', padding: '24px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.7)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', color: 'var(--color-primary)', fontWeight: 700 }}>
-                <ClipboardList size={18} />
-                Data konsultasi
-              </div>
-              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem', lineHeight: 1.65 }}>
-                Profil pelanggan dibentuk dari area perawatan, jenis kulit, permasalahan, tujuan, dan riwayat treatment.
-              </p>
+      <div className="consultation-layout">
+        <aside className="consultation-panel">
+          <img
+            src="https://images.unsplash.com/photo-1556228578-0d85b1a4d571?auto=format&fit=crop&q=80&w=900"
+            alt="Perlengkapan perawatan salon"
+          />
+          <div>
+            <div className="panel-title">
+              <ClipboardList size={18} />
+              Konsultasi salon
             </div>
+            <p>
+              Data ini disimpan sebagai riwayat konsultasi yang dapat dilihat
+              admin salon pada halaman pelanggan.
+            </p>
           </div>
         </aside>
 
-        <div className="card" style={{ padding: '36px', borderRadius: '8px' }}>
-          <form onSubmit={handleSubmit}>
-            <section style={{ marginBottom: '32px' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                01. Area Perawatan
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '10px' }}>
-                {profileOptions.areas.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    aria-pressed={area === type}
-                    onClick={() => setArea(type)}
-                    style={{
-                      minHeight: '46px',
-                      padding: '10px 12px',
-                      border: `1px solid ${area === type ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                      borderRadius: '8px',
-                      backgroundColor: area === type ? '#F6EDED' : '#FFF',
-                      color: area === type ? 'var(--color-primary)' : 'var(--color-text-main)',
-                      fontWeight: area === type ? 700 : 500,
-                    }}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section style={{ marginBottom: '32px' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                02. Jenis Kulit Wajah
-              </label>
-              <select
-                value={skinType}
-                onChange={(e) => setSkinType(e.target.value)}
-                disabled={area !== 'Wajah'}
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--color-border)',
-                  fontSize: '1rem',
-                  outline: 'none',
-                  backgroundColor: area === 'Wajah' ? '#FFF' : '#F3EFEA',
-                  color: area === 'Wajah' ? 'var(--color-text-main)' : 'var(--color-text-muted)',
-                  fontFamily: 'inherit',
-                }}
-                required={area === 'Wajah'}
-              >
-                {profileOptions.skinTypes.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </section>
-
-            <section style={{ marginBottom: '32px' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                03. Permasalahan Utama
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px' }}>
-                {profileOptions.problems.map((problem) => (
-                  <label key={problem} style={{ minHeight: '44px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.88rem', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '10px 12px', backgroundColor: problems.includes(problem) ? '#FAF7F7' : '#FFF' }}>
-                    <input
-                      type="checkbox"
-                      value={problem}
-                      checked={problems.includes(problem)}
-                      onChange={handleProblemChange}
-                      style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px', flexShrink: 0 }}
-                    />
-                    {problem}
-                  </label>
-                ))}
-              </div>
-            </section>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', marginBottom: '40px' }}>
-              <section>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                  04. Tujuan Perawatan
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {profileOptions.goals.map((item) => (
-                    <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                      <input
-                        type="radio"
-                        name="goal"
-                        value={item}
-                        checked={goal === item}
-                        onChange={(e) => setGoal(e.target.value)}
-                        style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
-                      />
-                      {item}
-                    </label>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>
-                  05. Riwayat Treatment
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {profileOptions.histories.map((item) => (
-                    <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem' }}>
-                      <input
-                        type="radio"
-                        name="history"
-                        value={item}
-                        checked={history === item}
-                        onChange={(e) => setHistory(e.target.value)}
-                        style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
-                      />
-                      {item}
-                    </label>
-                  ))}
-                </div>
-              </section>
+        <form className="form-card" onSubmit={handleSubmit}>
+          <section>
+            <div className="form-section-title">
+              <CalendarClock size={18} />
+              Data Pelanggan
             </div>
+            <div className="form-grid two">
+              <label className="field">
+                <span>Nama pelanggan</span>
+                <input
+                  type="text"
+                  value={customer.name}
+                  onChange={(event) => updateCustomer('name', event.target.value)}
+                  placeholder="Contoh: Siti Rahma"
+                  required
+                  readOnly={Boolean(loggedCustomer)}
+                />
+              </label>
+              <label className="field">
+                <span>Nomor WhatsApp</span>
+                <input
+                  type="tel"
+                  value={customer.phone}
+                  onChange={(event) => updateCustomer('phone', event.target.value)}
+                  placeholder="08xxxxxxxxxx"
+                  required
+                  readOnly={Boolean(loggedCustomer)}
+                />
+              </label>
+              <label className="field">
+                <span>Tanggal kunjungan</span>
+                <input
+                  type="date"
+                  value={customer.visitDate}
+                  onChange={(event) => updateCustomer('visitDate', event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Jam kunjungan</span>
+                <input
+                  type="time"
+                  value={customer.visitTime}
+                  onChange={(event) => updateCustomer('visitTime', event.target.value)}
+                  required
+                />
+              </label>
+            </div>
+          </section>
 
-            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '15px', fontSize: '1rem' }}>
-              <Sparkles size={18} />
-              Dapatkan Rekomendasi
-              <ArrowRight size={18} />
-            </button>
-          </form>
-        </div>
+          <section>
+            <div className="form-section-title">Area Perawatan</div>
+            <div className="choice-grid four">
+              {profileOptions.areas.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  aria-pressed={area === type}
+                  className={area === type ? 'choice-button active' : 'choice-button'}
+                  onClick={() => handleAreaChange(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {area === 'Wajah' && (
+            <section>
+              <label className="field">
+                <span>Jenis kulit wajah</span>
+                <select
+                  value={skinType}
+                  onChange={(event) => setSkinType(event.target.value)}
+                  required
+                >
+                  <option value="">Pilih jenis kulit</option>
+                  {profileOptions.skinTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </label>
+            </section>
+          )}
+
+          <section>
+            <div className="form-section-title">Permasalahan Utama</div>
+            <div className="choice-grid three">
+              {visibleProblems.map((problem) => (
+                <label key={problem} className="checkbox-pill">
+                  <input
+                    type="checkbox"
+                    value={problem}
+                    checked={problems.includes(problem)}
+                    onChange={handleProblemChange}
+                  />
+                  {problem}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="form-section-title">Tujuan Perawatan</div>
+            <div className="choice-grid three">
+              {visibleGoals.map((item) => (
+                <label key={item} className="radio-pill">
+                  <input
+                    type="radio"
+                    name="goal"
+                    value={item}
+                    checked={goal === item}
+                    onChange={(event) => setGoal(event.target.value)}
+                  />
+                  {item}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <div className="form-grid two">
+              <label className="field">
+                <span>Riwayat treatment</span>
+                <select value={history} onChange={(event) => setHistory(event.target.value)}>
+                  {profileOptions.histories.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Catatan tambahan</span>
+                <textarea
+                  value={customer.notes}
+                  onChange={(event) => updateCustomer('notes', event.target.value)}
+                  placeholder="Alergi, preferensi stylist, atau catatan lain"
+                  rows={3}
+                />
+              </label>
+            </div>
+          </section>
+
+          {error && <p className="form-error">{error}</p>}
+
+          <button type="submit" className="btn-primary wide-button" disabled={isSubmitting}>
+            <Sparkles size={18} />
+            {isSubmitting ? 'Menyimpan Konsultasi...' : 'Lihat Rekomendasi'}
+            <ArrowRight size={18} />
+          </button>
+        </form>
       </div>
     </div>
   );

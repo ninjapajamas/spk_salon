@@ -20,6 +20,9 @@ export const attributeCatalog = [
   { code: "A19", label: "Kesehatan kaki", group: "Kuku/kulit" },
   { code: "A20", label: "Nutrisi kulit", group: "Kuku/kulit" },
   { code: "A21", label: "Relaksasi wajah", group: "Kuku/kulit" },
+  { code: "A22", label: "Kuku kusam", group: "Kuku/kulit" },
+  { code: "A23", label: "Kaki kering", group: "Kuku/kulit" },
+  { code: "A24", label: "Kulit normal", group: "Kulit wajah" },
 ];
 
 const attributeCodeByLabel = Object.fromEntries(
@@ -36,7 +39,7 @@ export const articleProfileExample = {
 
 export const profileOptions = {
   areas: ["Wajah", "Rambut", "Kuku tangan", "Kuku kaki"],
-  skinTypes: ["Kulit berminyak", "Kulit sensitif", "Kulit kusam"],
+  skinTypes: ["Kulit normal", "Kulit berminyak", "Kulit sensitif", "Kulit kusam"],
   problems: [
     "Komedo",
     "Kulit kusam",
@@ -67,6 +70,7 @@ export const treatments = [
     name: "Facial",
     category: "Wajah",
     articleDescription: "Bersihkan wajah",
+    summary: "Membersihkan wajah",
     price: 150000,
     duration: 60,
     rating: 4.9,
@@ -80,6 +84,7 @@ export const treatments = [
     name: "Hair Spa",
     category: "Rambut",
     articleDescription: "Nutrisi rambut",
+    summary: "Nutrisi rambut",
     price: 180000,
     duration: 90,
     rating: 4.8,
@@ -93,6 +98,7 @@ export const treatments = [
     name: "Creambath",
     category: "Rambut",
     articleDescription: "Penguatan rambut",
+    summary: "Penguatan rambut",
     price: 120000,
     duration: 60,
     rating: 4.7,
@@ -106,6 +112,7 @@ export const treatments = [
     name: "Hair Mask",
     category: "Rambut",
     articleDescription: "Melembutkan rambut",
+    summary: "Melembutkan rambut",
     price: 160000,
     duration: 60,
     rating: 4.8,
@@ -119,6 +126,7 @@ export const treatments = [
     name: "Manicure",
     category: "Kuku tangan",
     articleDescription: "Merawat kuku tangan",
+    summary: "Merawat kuku tangan",
     price: 90000,
     duration: 45,
     rating: 4.6,
@@ -132,6 +140,7 @@ export const treatments = [
     name: "Pedicure",
     category: "Kuku kaki",
     articleDescription: "Merawat kuku kaki",
+    summary: "Merawat kuku kaki",
     price: 100000,
     duration: 45,
     rating: 4.6,
@@ -145,6 +154,7 @@ export const treatments = [
     name: "Masker Wajah",
     category: "Wajah",
     articleDescription: "Nutrisi kulit wajah",
+    summary: "Nutrisi kulit wajah",
     price: 110000,
     duration: 45,
     rating: 4.7,
@@ -158,6 +168,7 @@ export const treatments = [
     name: "Totok Wajah",
     category: "Wajah",
     articleDescription: "Relaksasi wajah",
+    summary: "Relaksasi wajah",
     price: 130000,
     duration: 45,
     rating: 4.8,
@@ -223,20 +234,30 @@ function getSuitabilityLabel(similarity) {
 
 function createReason(treatment, matchedAttributes, similarity) {
   if (!matchedAttributes.length) {
-    return `${treatment.name} tidak menjadi prioritas karena atributnya belum cocok dengan profil konsultasi saat ini.`;
+    return `${treatment.name} belum menjadi prioritas utama untuk kebutuhan konsultasi saat ini.`;
   }
 
   const matchedText = matchedAttributes.join(", ");
-  const label = getSuitabilityLabel(similarity).toLowerCase();
 
-  return `${treatment.name} ${label} karena cocok pada atribut ${matchedText}.`;
+  if (similarity >= 0.95) {
+    return `${treatment.name} sangat disarankan karena sesuai dengan kebutuhan pelanggan: ${matchedText}.`;
+  }
+
+  if (similarity >= 0.4) {
+    return `${treatment.name} cocok sebagai pilihan perawatan karena menjawab kebutuhan: ${matchedText}.`;
+  }
+
+  return `${treatment.name} dapat dipertimbangkan sebagai alternatif ringan untuk kebutuhan: ${matchedText}.`;
 }
 
-export function getRecommendations(preferences = articleProfileExample) {
+export function getRecommendations(preferences = {}, treatmentList = treatments) {
   const userAttributes = buildUserAttributes(preferences);
   const userCodes = getAttributeCodes(userAttributes);
+  const activeTreatments = treatmentList.filter(
+    (treatment) => treatment.status !== "Tidak tersedia"
+  );
 
-  return treatments
+  return activeTreatments
     .map((treatment) => {
       const matchedAttributes = userAttributes.filter((attribute) =>
         treatment.attributes.includes(attribute)
@@ -269,7 +290,11 @@ export function getRecommendations(preferences = articleProfileExample) {
         },
       };
     })
-    .sort((a, b) => b.similarityScore - a.similarityScore || a.id - b.id);
+    .sort(
+      (a, b) =>
+        b.similarityScore - a.similarityScore ||
+        String(a.id).localeCompare(String(b.id), "id-ID", { numeric: true })
+    );
 }
 
 export const articleRankingExample = getRecommendations(articleProfileExample);

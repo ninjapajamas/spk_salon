@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
-import { MoreVertical, Plus, Search, Scissors } from 'lucide-react';
+import { Edit2, Plus, Save, Search, Scissors, Trash2, X } from 'lucide-react';
 import AdminSidebar from '../../components/AdminSidebar';
-import { getAttributeCodes, treatments } from '../../utils/recommendationEngine';
 
 const currency = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -9,152 +8,314 @@ const currency = new Intl.NumberFormat('id-ID', {
   maximumFractionDigits: 0,
 });
 
-export default function Inventory() {
+const fallbackImages = {
+  Wajah: 'https://images.unsplash.com/photo-1615396899839-c99c121888b0?auto=format&fit=crop&q=80&w=800',
+  Rambut: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&q=80&w=800',
+  'Kuku tangan': 'https://images.unsplash.com/photo-1522337660859-02fbefca4702?auto=format&fit=crop&q=80&w=800',
+  'Kuku kaki': 'https://images.unsplash.com/photo-1519014816548-bf5fe059e98b?auto=format&fit=crop&q=80&w=800',
+};
+
+const statusOptions = ['Tersedia', 'Tidak tersedia'];
+const categoryOptions = ['Wajah', 'Rambut', 'Kuku tangan', 'Kuku kaki'];
+
+function createEmptyForm() {
+  return {
+    id: null,
+    name: '',
+    category: 'Wajah',
+    summary: '',
+    price: '',
+    duration: '',
+    status: 'Tersedia',
+    image: '',
+    description: '',
+    attributes: ['Wajah'],
+  };
+}
+
+export default function Inventory({
+  attributes = [],
+  treatments = [],
+  onSaveTreatment,
+  onDeleteTreatment,
+  onLogout,
+}) {
   const [query, setQuery] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [form, setForm] = useState(createEmptyForm);
+  const [formError, setFormError] = useState('');
+  const attributeChoices = useMemo(
+    () => Array.from(new Set(attributes.map((attribute) => attribute.label))),
+    [attributes]
+  );
 
   const filteredTreatments = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return treatments;
 
     return treatments.filter((item) =>
-      [item.name, item.category, item.articleDescription, ...item.attributes]
+      [item.name, item.category, item.summary, item.articleDescription, item.description, ...item.attributes]
         .join(' ')
         .toLowerCase()
         .includes(keyword)
     );
-  }, [query]);
+  }, [query, treatments]);
 
-  const averagePrice = Math.round(
-    treatments.reduce((total, item) => total + item.price, 0) / treatments.length
-  );
+  const activeTreatments = treatments.filter((item) => item.status !== 'Tidak tersedia');
+  const averagePrice = treatments.length
+    ? Math.round(treatments.reduce((total, item) => total + Number(item.price || 0), 0) / treatments.length)
+    : 0;
+
+  const openCreateForm = () => {
+    setFormError('');
+    setForm(createEmptyForm());
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (treatment) => {
+    setFormError('');
+    setForm({
+      ...treatment,
+      summary: treatment.summary || treatment.articleDescription || '',
+      attributes: treatment.attributes || [],
+    });
+    setIsFormOpen(true);
+  };
+
+  const updateForm = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const toggleAttribute = (attribute) => {
+    setForm((current) => {
+      const exists = current.attributes.includes(attribute);
+      return {
+        ...current,
+        attributes: exists
+          ? current.attributes.filter((item) => item !== attribute)
+          : [...current.attributes, attribute],
+      };
+    });
+  };
+
+  const handleCategoryChange = (category) => {
+    setForm((current) => ({
+      ...current,
+      category,
+      attributes: Array.from(new Set([category, ...current.attributes])),
+    }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const payload = {
+      ...form,
+      image: form.image || fallbackImages[form.category],
+      articleDescription: form.summary,
+      attributes: Array.from(new Set([form.category, ...form.attributes])),
+    };
+    try {
+      setFormError('');
+      await onSaveTreatment(payload);
+      setIsFormOpen(false);
+      setForm(createEmptyForm());
+    } catch (error) {
+      setFormError(error.message || 'Treatment gagal disimpan.');
+    }
+  };
+
+  const handleDelete = async (treatment) => {
+    const approved = window.confirm(`Hapus treatment ${treatment.name}?`);
+    if (approved) await onDeleteTreatment(treatment.id);
+  };
 
   return (
-    <div style={{ display: 'flex', backgroundColor: '#F9F8F6', minHeight: '100vh' }}>
-      <AdminSidebar />
-      <main style={{ marginLeft: '260px', flex: 1, padding: '44px', maxWidth: '1280px' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '32px', marginBottom: '34px' }}>
-          <div style={{ maxWidth: '680px' }}>
-            <p style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '1.6px', color: 'var(--color-primary)', fontWeight: 700, marginBottom: '10px' }}>
-              Data master artikel
-            </p>
-            <h1 style={{ fontSize: '2.35rem', marginBottom: '8px', color: 'var(--color-text-main)' }}>Kelola Treatment</h1>
-            <p style={{ color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-              Daftar layanan, kategori, deskripsi singkat, dan atribut rekomendasi yang digunakan pada proses cosine similarity.
-            </p>
+    <div className="admin-shell">
+      <AdminSidebar onLogout={onLogout} />
+      <main className="admin-main">
+        <header className="admin-header">
+          <div>
+            <p className="eyebrow">Data layanan salon</p>
+            <h1>Kelola Treatment</h1>
+            <p>Tambah, ubah, aktifkan, atau nonaktifkan layanan yang dipakai pada konsultasi pelanggan.</p>
           </div>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={17} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+          <div className="admin-toolbar">
+            <div className="search-field">
+              <Search size={17} />
               <input
                 type="text"
                 placeholder="Cari treatment..."
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                style={{ padding: '12px 16px 12px 42px', width: '280px', borderRadius: '8px', border: '1px solid var(--color-border)', outline: 'none', fontFamily: 'var(--font-sans)' }}
               />
             </div>
-            <button className="btn-primary" type="button">
+            <button className="btn-primary" type="button" onClick={openCreateForm}>
               <Plus size={17} />
               Treatment
             </button>
           </div>
         </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '30px' }}>
+        <div className="metric-grid three">
           {[
-            { label: 'Total Layanan', value: treatments.length, badge: 'Aktif' },
-            { label: 'Rata-rata Harga', value: currency.format(averagePrice), badge: 'Operasional' },
-            { label: 'Atribut Item', value: 'A1-A21', badge: 'Artikel' },
+            { label: 'Total Layanan', value: treatments.length, helper: 'Semua data' },
+            { label: 'Tersedia', value: activeTreatments.length, helper: 'Bisa direkomendasikan' },
+            { label: 'Rata-rata Harga', value: currency.format(averagePrice), helper: 'Estimasi layanan' },
           ].map((stat) => (
-            <div key={stat.label} className="card" style={{ padding: '24px', borderRadius: '8px', boxShadow: 'none', border: '1px solid var(--color-border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '22px' }}>
-                <div style={{ width: '40px', height: '40px', backgroundColor: '#FAF7F2', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}>
-                  <Scissors size={18} />
-                </div>
-                <span className="badge gold">{stat.badge}</span>
+            <article key={stat.label} className="metric-card">
+              <div>
+                <span className="metric-icon"><Scissors size={18} /></span>
+                <span className="metric-helper">{stat.helper}</span>
               </div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.7px', fontWeight: 700 }}>{stat.label}</p>
-              <h3 style={{ fontSize: '2rem', fontFamily: 'var(--font-serif)', color: 'var(--color-text-main)', margin: 0 }}>{stat.value}</h3>
-            </div>
+              <p>{stat.label}</p>
+              <strong>{stat.value}</strong>
+            </article>
           ))}
         </div>
 
-        <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '8px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)', backgroundColor: '#FAF8F5' }}>
-                <HeaderCell>Nama Treatment</HeaderCell>
-                <HeaderCell>Kategori</HeaderCell>
-                <HeaderCell>Deskripsi Singkat</HeaderCell>
-                <HeaderCell>Atribut</HeaderCell>
-                <HeaderCell>Harga</HeaderCell>
-                <HeaderCell>Status</HeaderCell>
-                <HeaderCell>Aksi</HeaderCell>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTreatments.map((item) => (
-                <tr key={item.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <td style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: '14px', minWidth: '210px' }}>
-                    <img src={item.image} alt={item.name} style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
-                    <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 600, fontSize: '1.06rem' }}>{item.name}</span>
-                  </td>
-                  <BodyCell>
-                    <span style={{ backgroundColor: '#F3EFEA', padding: '6px 12px', borderRadius: '999px', fontSize: '0.82rem' }}>{item.category}</span>
-                  </BodyCell>
-                  <BodyCell>{item.articleDescription}</BodyCell>
-                  <BodyCell>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxWidth: '260px' }}>
-                      {getAttributeCodes(item.attributes).map((code, index) => (
-                        <span key={`${item.id}-${code}-${index}`} className="badge rose" style={{ padding: '3px 8px' }}>
-                          {code === '-' ? item.attributes[index] : code}
-                        </span>
-                      ))}
-                    </div>
-                  </BodyCell>
-                  <BodyCell><strong>{currency.format(item.price)}</strong></BodyCell>
-                  <BodyCell>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--color-primary)' }} />
-                      {item.status}
-                    </span>
-                  </BodyCell>
-                  <BodyCell>
-                    <button type="button" aria-label={`Aksi ${item.name}`} style={{ width: '32px', height: '32px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
-                      <MoreVertical size={18} />
-                    </button>
-                  </BodyCell>
+        <section className="admin-card table-card">
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Nama Treatment</th>
+                  <th>Kategori</th>
+                  <th>Manfaat</th>
+                  <th>Kebutuhan Cocok</th>
+                  <th>Harga</th>
+                  <th>Durasi</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', borderTop: '1px solid var(--color-border)' }}>
-            <span style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)' }}>
-              Menampilkan {filteredTreatments.length} dari {treatments.length} treatment
-            </span>
-            <span style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)' }}>
-              Sumber data: Tabel 2 dan Tabel 4 artikel
-            </span>
+              </thead>
+              <tbody>
+                {filteredTreatments.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="table-treatment">
+                        <img src={item.image} alt={item.name} />
+                        <strong>{item.name}</strong>
+                      </div>
+                    </td>
+                    <td><span className="soft-pill">{item.category}</span></td>
+                    <td>{item.summary || item.articleDescription}</td>
+                    <td>
+                      <div className="tag-list">
+                        {item.attributes.slice(0, 4).map((attribute) => (
+                          <span key={`${item.id}-${attribute}`}>{attribute}</span>
+                        ))}
+                        {item.attributes.length > 4 && <span>+{item.attributes.length - 4}</span>}
+                      </div>
+                    </td>
+                    <td><strong>{currency.format(item.price)}</strong></td>
+                    <td>{item.duration} menit</td>
+                    <td><span className="status-pill">{item.status}</span></td>
+                    <td>
+                      <div className="action-row">
+                        <button type="button" className="icon-button" aria-label={`Edit ${item.name}`} onClick={() => openEditForm(item)}>
+                          <Edit2 size={17} />
+                        </button>
+                        <button type="button" className="icon-button danger" aria-label={`Hapus ${item.name}`} onClick={() => handleDelete(item)}>
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+
+          <div className="table-footer">
+            <span>Menampilkan {filteredTreatments.length} dari {treatments.length} treatment</span>
+            <span>Perubahan langsung memengaruhi rekomendasi pelanggan.</span>
+          </div>
+        </section>
       </main>
+
+      {isFormOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <form className="modal-card treatment-form" onSubmit={handleSubmit}>
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">{form.id ? 'Edit treatment' : 'Treatment baru'}</p>
+                <h2>{form.id ? form.name : 'Tambah Treatment'}</h2>
+              </div>
+              <button type="button" className="icon-button" aria-label="Tutup form" onClick={() => setIsFormOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="form-grid two">
+              <label className="field">
+                <span>Nama treatment</span>
+                <input value={form.name} onChange={(event) => updateForm('name', event.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Kategori</span>
+                <select value={form.category} onChange={(event) => handleCategoryChange(event.target.value)}>
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Manfaat singkat</span>
+                <input value={form.summary} onChange={(event) => updateForm('summary', event.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select value={form.status} onChange={(event) => updateForm('status', event.target.value)}>
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Harga</span>
+                <input type="number" min="0" value={form.price} onChange={(event) => updateForm('price', event.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Durasi menit</span>
+                <input type="number" min="1" value={form.duration} onChange={(event) => updateForm('duration', event.target.value)} required />
+              </label>
+            </div>
+
+            <label className="field">
+              <span>URL gambar</span>
+              <input value={form.image} onChange={(event) => updateForm('image', event.target.value)} placeholder="Opsional, otomatis memakai gambar kategori" />
+            </label>
+
+            <label className="field">
+              <span>Deskripsi layanan</span>
+              <textarea value={form.description} onChange={(event) => updateForm('description', event.target.value)} rows={4} required />
+            </label>
+
+            <div>
+              <div className="form-section-title">Kebutuhan pelanggan yang cocok</div>
+              <div className="attribute-picker">
+                {attributeChoices.map((attribute) => (
+                  <label key={attribute} className="checkbox-pill">
+                    <input
+                      type="checkbox"
+                      checked={form.attributes.includes(attribute)}
+                      onChange={() => toggleAttribute(attribute)}
+                    />
+                    {attribute}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {formError && <p className="form-error">{formError}</p>}
+
+            <button type="submit" className="btn-primary wide-button">
+              <Save size={18} />
+              Simpan Treatment
+            </button>
+          </form>
+        </div>
+      )}
     </div>
-  );
-}
-
-function HeaderCell({ children }) {
-  return (
-    <th style={{ padding: '18px 20px', fontWeight: 700, fontSize: '0.82rem', color: 'var(--color-text-main)', whiteSpace: 'nowrap' }}>
-      {children}
-    </th>
-  );
-}
-
-function BodyCell({ children }) {
-  return (
-    <td style={{ padding: '18px 20px', color: 'var(--color-text-main)', fontSize: '0.88rem', verticalAlign: 'middle' }}>
-      {children}
-    </td>
   );
 }

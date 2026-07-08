@@ -1,16 +1,113 @@
-# React + Vite
+# Sistem Rekomendasi Treatment Salon
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplikasi React + Vite untuk konsultasi treatment Jharmy Salon. Pelanggan bisa login untuk menyimpan riwayat konsultasi di dashboard pribadi, atau langsung konsultasi sebagai tamu. Admin dapat mengelola treatment, atribut rekomendasi, data pelanggan, dan status konsultasi.
 
-Currently, two official plugins are available:
+## Fitur
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Login pelanggan dan admin.
+- Registrasi akun pelanggan.
+- Konsultasi tanpa login tetap tersedia.
+- Dashboard pelanggan untuk melihat riwayat konsultasi akun sendiri.
+- Form konsultasi dengan nama, WhatsApp, jadwal, area perawatan, kondisi, tujuan, riwayat, dan catatan.
+- Rekomendasi treatment dari data layanan salon yang aktif.
+- Tampilan hasil yang ramah pelanggan tanpa rincian rumus atau tabel perhitungan.
+- Dashboard admin untuk memantau konsultasi, follow up, dan treatment populer.
+- Kelola treatment: tambah, edit, nonaktifkan, dan hapus layanan.
+- Kelola atribut: tambah, edit, dan hapus atribut rekomendasi.
+- Kelola data pelanggan dan status booking.
 
-## React Compiler
+## Akun Demo Lokal
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Admin:
 
-## Expanding the ESLint configuration
+```text
+Email: admin@jharmysalon.local
+Password: admin123
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Pelanggan:
+
+```text
+Email: siti@example.com
+Password: pelanggan123
+```
+
+## Menjalankan Project
+
+```bash
+npm install
+```
+
+Jalankan schema database terlebih dahulu:
+
+```bash
+$env:PGPASSWORD='123'
+psql -h localhost -U postgres -d salon -f database/salon_schema.sql
+```
+
+Jalankan backend API:
+
+```bash
+npm run server
+```
+
+Jalankan React/Vite di terminal lain:
+
+```bash
+npm run dev
+```
+
+Vite akan meneruskan request `/api` ke backend `http://127.0.0.1:3001`.
+
+Build produksi:
+
+```bash
+npm run build
+```
+
+Lint:
+
+```bash
+npm run lint
+```
+
+## Database PostgreSQL
+
+Schema database ada di:
+
+```text
+database/salon_schema.sql
+```
+
+Database lokal yang digunakan:
+
+```text
+Database: salon
+User: postgres
+Password: 123
+Host: localhost
+```
+
+Menjalankan schema:
+
+```bash
+$env:PGPASSWORD='123'
+psql -h localhost -U postgres -d salon -f database/salon_schema.sql
+```
+
+Schema mencakup tabel `users`, `consultation_profiles`, `treatments`, `attributes`, `treatment_attributes`, `recommendations`, dan `recommendation_details`.
+
+Backend Express ada di folder `server/` dan menggunakan koneksi PostgreSQL dari environment variable. Nilai defaultnya sudah disesuaikan untuk database lokal `salon`.
+
+Endpoint utama:
+
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `GET /api/treatments`
+- `POST /api/treatments`
+- `GET /api/attributes`
+- `POST /api/attributes`
+- `GET /api/consultations`
+- `POST /api/consultations`
+
+Catatan: sesi login tetap disimpan di `localStorage` browser agar pengguna tidak langsung logout saat refresh. Data utama seperti user, treatment, atribut, konsultasi, rekomendasi, dan detail rekomendasi tersimpan di PostgreSQL melalui API.
