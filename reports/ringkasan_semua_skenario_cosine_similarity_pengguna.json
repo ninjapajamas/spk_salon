@@ -1,0 +1,177 @@
+{
+  "generatedAt": "2026-06-05",
+  "totalScenariosIncludingHistory": 153600,
+  "totalUniqueCosineProfilesWithoutHistory": 51200,
+  "inputSpace": {
+    "areas": 4,
+    "skinTypes": 5,
+    "problemOptions": 9,
+    "problemCombinations": 512,
+    "goals": 5,
+    "histories": 3,
+    "note": "history disimpan sebagai data pengguna, tetapi belum digunakan oleh getRecommendations untuk membentuk userAttributes."
+  },
+  "top1DistributionIncludingHistory": {
+    "Facial": 57780,
+    "Hair Spa": 18546,
+    "Creambath": 26268,
+    "Hair Mask": 4848,
+    "Manicure": 22593,
+    "Pedicure": 11217,
+    "Masker Wajah": 6300,
+    "Totok Wajah": 6048
+  },
+  "top1DistributionUniqueWithoutHistory": {
+    "Facial": 19260,
+    "Hair Spa": 6182,
+    "Creambath": 8756,
+    "Hair Mask": 1616,
+    "Manicure": 7531,
+    "Pedicure": 3739,
+    "Masker Wajah": 2100,
+    "Totok Wajah": 2016
+  },
+  "top1TieDistributionUniqueWithoutHistory": {
+    "1": 43490,
+    "2": 6044,
+    "3": 1326,
+    "4": 340
+  },
+  "zeroTopCount": {
+    "allScenarios": 0,
+    "uniqueWithoutHistory": 0
+  },
+  "maxScoreByTreatment": {
+    "Facial": 1,
+    "Hair Spa": 0.75,
+    "Creambath": 0.866025,
+    "Hair Mask": 0.57735,
+    "Manicure": 0.866025,
+    "Pedicure": 0.57735,
+    "Masker Wajah": 0.75,
+    "Totok Wajah": 0.75
+  },
+  "minScoreByTreatment": {
+    "Facial": 0,
+    "Hair Spa": 0,
+    "Creambath": 0,
+    "Hair Mask": 0,
+    "Manicure": 0,
+    "Pedicure": 0,
+    "Masker Wajah": 0,
+    "Totok Wajah": 0
+  },
+  "sampleRows": [
+    {
+      "scenario_id": "SC-000001",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Membersihkan wajah",
+      "history": "Belum pernah",
+      "top1": "Facial",
+      "score": 0.516398,
+      "percent": 52
+    },
+    {
+      "scenario_id": "SC-000002",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Membersihkan wajah",
+      "history": "Pernah facial",
+      "top1": "Facial",
+      "score": 0.516398,
+      "percent": 52
+    },
+    {
+      "scenario_id": "SC-000003",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Membersihkan wajah",
+      "history": "Pernah hair spa",
+      "top1": "Facial",
+      "score": 0.516398,
+      "percent": 52
+    },
+    {
+      "scenario_id": "SC-000004",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Relaksasi",
+      "history": "Belum pernah",
+      "top1": "Totok Wajah",
+      "score": 0.57735,
+      "percent": 58
+    },
+    {
+      "scenario_id": "SC-000005",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Relaksasi",
+      "history": "Pernah facial",
+      "top1": "Totok Wajah",
+      "score": 0.57735,
+      "percent": 58
+    },
+    {
+      "scenario_id": "SC-000006",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Relaksasi",
+      "history": "Pernah hair spa",
+      "top1": "Totok Wajah",
+      "score": 0.57735,
+      "percent": 58
+    },
+    {
+      "scenario_id": "SC-000007",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Nutrisi rambut",
+      "history": "Belum pernah",
+      "top1": "Hair Spa",
+      "score": 0.288675,
+      "percent": 29
+    },
+    {
+      "scenario_id": "SC-000008",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Nutrisi rambut",
+      "history": "Pernah facial",
+      "top1": "Hair Spa",
+      "score": 0.288675,
+      "percent": 29
+    },
+    {
+      "scenario_id": "SC-000009",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Nutrisi rambut",
+      "history": "Pernah hair spa",
+      "top1": "Hair Spa",
+      "score": 0.288675,
+      "percent": 29
+    },
+    {
+      "scenario_id": "SC-000010",
+      "area": "Wajah",
+      "skinType": "Normal",
+      "problems": [],
+      "goal": "Penguatan rambut",
+      "history": "Belum pernah",
+      "top1": "Creambath",
+      "score": 0.333333,
+      "percent": 33
+    }
+  ],
+  "csvPath": "./reports/hasil_semua_skenario_cosine_similarity_pengguna.csv"
+}
