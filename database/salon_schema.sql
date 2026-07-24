@@ -58,11 +58,24 @@ CREATE TABLE IF NOT EXISTS consultation_profiles (
   goal VARCHAR(120) NOT NULL,
   history VARCHAR(120),
   notes TEXT,
-  status VARCHAR(50) NOT NULL DEFAULT 'Menunggu konfirmasi salon',
+  status VARCHAR(50) NOT NULL DEFAULT 'Rekomendasi saja',
   selected_treatment_id UUID REFERENCES treatments(id) ON DELETE SET NULL,
+  reservation_code VARCHAR(80) UNIQUE,
+  salon_note TEXT,
+  reserved_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE consultation_profiles
+  ADD COLUMN IF NOT EXISTS reservation_code VARCHAR(80) UNIQUE,
+  ADD COLUMN IF NOT EXISTS salon_note TEXT,
+  ADD COLUMN IF NOT EXISTS reserved_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+ALTER TABLE consultation_profiles
+  ALTER COLUMN status SET DEFAULT 'Rekomendasi saja';
 
 CREATE TABLE IF NOT EXISTS recommendations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,6 +99,12 @@ CREATE TABLE IF NOT EXISTS recommendation_details (
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_consultation_user_id ON consultation_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_consultation_status ON consultation_profiles(status);
+CREATE INDEX IF NOT EXISTS idx_consultation_visit_slot
+  ON consultation_profiles(visit_date, visit_time);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_active_reservation_slot
+  ON consultation_profiles(visit_date, visit_time)
+  WHERE reservation_code IS NOT NULL
+    AND status NOT IN ('Dibatalkan', 'Rekomendasi saja');
 CREATE INDEX IF NOT EXISTS idx_treatments_status ON treatments(status);
 CREATE INDEX IF NOT EXISTS idx_attributes_group_name ON attributes(group_name);
 CREATE INDEX IF NOT EXISTS idx_recommendation_details_rank ON recommendation_details(recommendation_id, rank_no);

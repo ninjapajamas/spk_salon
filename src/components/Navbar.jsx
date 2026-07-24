@@ -1,4 +1,4 @@
-import { ClipboardList, LayoutDashboard, LogOut, UserRound } from 'lucide-react';
+import { ClipboardList, LogOut, Scissors, UserRound } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function Navbar({ currentUser = null, hasConsultation = false, onLogout }) {
@@ -18,6 +18,7 @@ export default function Navbar({ currentUser = null, hasConsultation = false, on
 
       <div className="nav-links">
         <Link to="/" className={linkClass('/')}>Beranda</Link>
+        <Link to="/treatments" className={linkClass('/treatments')}>Perawatan</Link>
         <Link to="/quiz" className={linkClass('/quiz')}>Konsultasi</Link>
         {hasConsultation && (
           <Link to="/recommendations" className={linkClass('/recommendations')}>
@@ -29,7 +30,6 @@ export default function Navbar({ currentUser = null, hasConsultation = false, on
             Dashboard
           </Link>
         )}
-        <Link to="/login?role=admin" className="nav-link">Admin</Link>
       </div>
 
       <div className="nav-actions">
@@ -49,8 +49,8 @@ export default function Navbar({ currentUser = null, hasConsultation = false, on
             Login
           </Link>
         )}
-        <Link to="/login?role=admin" className="icon-button" aria-label="Buka admin">
-          <LayoutDashboard size={18} />
+        <Link to="/treatments" className="icon-button" aria-label="Lihat perawatan">
+          <Scissors size={18} />
         </Link>
         <Link to="/quiz" className="btn-primary">
           <ClipboardList size={17} />

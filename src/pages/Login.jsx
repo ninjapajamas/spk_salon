@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, LockKeyhole, UserPlus, UserRound } from 'lucide-react';
+import { ArrowRight, LockKeyhole, UserPlus } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Login({ currentUser, onLogin, onRegisterCustomer }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedRole = searchParams.get('role') === 'admin' ? 'admin' : 'customer';
+  const rawReturnTo = searchParams.get('returnTo') || '';
+  const returnTo = rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '';
   const [mode, setMode] = useState('login');
-  const [role, setRole] = useState(requestedRole);
+  const role = requestedRole;
   const [form, setForm] = useState({
     fullName: '',
     phone: '',
@@ -21,23 +23,12 @@ export default function Login({ currentUser, onLogin, onRegisterCustomer }) {
       navigate('/admin', { replace: true });
     }
     if (requestedRole === 'customer' && currentUser?.role === 'customer') {
-      navigate('/dashboard', { replace: true });
+      navigate(returnTo || '/dashboard', { replace: true });
     }
-  }, [currentUser, navigate, requestedRole]);
+  }, [currentUser, navigate, requestedRole, returnTo]);
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
-  };
-
-  const handleRoleChange = (nextRole) => {
-    setRole(nextRole);
-    setMode('login');
-    setMessage('');
-    setForm((current) => ({
-      ...current,
-      email: nextRole === 'admin' ? 'admin@jharmysalon.local' : '',
-      password: nextRole === 'admin' ? 'admin123' : '',
-    }));
   };
 
   const handleSubmit = async (event) => {
@@ -56,7 +47,7 @@ export default function Login({ currentUser, onLogin, onRegisterCustomer }) {
         return;
       }
 
-      navigate('/dashboard');
+      navigate(returnTo || '/dashboard');
       return;
     }
 
@@ -71,7 +62,7 @@ export default function Login({ currentUser, onLogin, onRegisterCustomer }) {
       return;
     }
 
-    navigate(role === 'admin' ? '/admin' : '/dashboard');
+    navigate(role === 'admin' ? '/admin' : returnTo || '/dashboard');
   };
 
   return (
@@ -79,30 +70,18 @@ export default function Login({ currentUser, onLogin, onRegisterCustomer }) {
       <section className="auth-card">
         <div>
           <p className="eyebrow">Akses pengguna</p>
-          <h1>{mode === 'register' ? 'Daftar Pelanggan' : 'Login Jharmy Salon'}</h1>
+          <h1>
+            {role === 'admin'
+              ? 'Login Admin Jharmy Salon'
+              : mode === 'register'
+                ? 'Daftar Pelanggan'
+                : 'Login Pelanggan'}
+          </h1>
           <p>
-            Pelanggan yang login dapat melihat riwayat konsultasi sendiri. Tamu
-            tetap bisa langsung konsultasi tanpa membuat akun.
+            {role === 'admin'
+              ? 'Masukkan kredensial admin untuk membuka portal operasional salon.'
+              : 'Login diperlukan saat membuat reservasi. Konsultasi dan rekomendasi tetap dapat digunakan tanpa akun.'}
           </p>
-        </div>
-
-        <div className="segmented-control">
-          <button
-            type="button"
-            className={role === 'customer' ? 'active' : ''}
-            onClick={() => handleRoleChange('customer')}
-          >
-            <UserRound size={16} />
-            Pelanggan
-          </button>
-          <button
-            type="button"
-            className={role === 'admin' ? 'active' : ''}
-            onClick={() => handleRoleChange('admin')}
-          >
-            <LockKeyhole size={16} />
-            Admin
-          </button>
         </div>
 
         {role === 'customer' && (

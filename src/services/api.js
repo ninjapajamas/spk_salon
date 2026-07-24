@@ -39,6 +39,14 @@ export const api = {
     });
   },
 
+  async updateCustomer(id, payload) {
+    const data = await request(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    return data.user;
+  },
+
   async getAttributes() {
     const data = await request('/attributes');
     return data.attributes;
@@ -73,6 +81,10 @@ export const api = {
   async getTreatments() {
     const data = await request('/treatments');
     return data.treatments;
+  },
+
+  async getAvailability(date) {
+    return request(`/availability?date=${encodeURIComponent(date)}`);
   },
 
   async saveTreatment(payload) {
@@ -139,6 +151,29 @@ export const api = {
     const data = await request(`/consultations/${id}/selected-treatment`, {
       method: 'PUT',
       body: JSON.stringify({ treatmentId }),
+    });
+    return data.consultation;
+  },
+
+  async createReservation(payload) {
+    const data = await request('/reservations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return data.reservation;
+  },
+
+  async scanReservation(code) {
+    return request('/reservations/scan', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  async updateSalonNote(id, note) {
+    const data = await request(`/consultations/${id}/salon-note`, {
+      method: 'PUT',
+      body: JSON.stringify({ note }),
     });
     return data.consultation;
   },

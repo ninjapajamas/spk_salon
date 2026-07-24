@@ -25,11 +25,11 @@ export default function Dashboard({ treatments = [], consultations = [], onLogou
   const uniqueCustomers = new Set(
     consultations.map((item) => item.customer.phone || item.customer.name)
   );
-  const waitingConsultations = consultations.filter((item) =>
-    item.status.toLowerCase().includes('menunggu')
-  );
   const completedConsultations = consultations.filter((item) =>
-    item.status.toLowerCase().includes('selesai')
+    item.status.toLowerCase().includes('sudah melakukan')
+  );
+  const activeReservations = consultations.filter(
+    (item) => item.reservationCode && !['Dibatalkan', 'Sudah melakukan perawatan'].includes(item.status)
   );
   const recentConsultations = consultations.slice(0, 5);
 
@@ -52,7 +52,7 @@ export default function Dashboard({ treatments = [], consultations = [], onLogou
   const metrics = [
     { label: 'Pelanggan', value: uniqueCustomers.size, helper: 'Data tersimpan', icon: Users },
     { label: 'Konsultasi', value: consultations.length, helper: 'Total masuk', icon: ClipboardList },
-    { label: 'Menunggu', value: waitingConsultations.length, helper: 'Perlu follow up', icon: CalendarCheck },
+    { label: 'Reservasi Aktif', value: activeReservations.length, helper: 'Jadwal mendatang', icon: CalendarCheck },
     { label: 'Treatment Aktif', value: activeTreatments.length, helper: `${completedConsultations.length} selesai`, icon: Scissors },
   ];
 

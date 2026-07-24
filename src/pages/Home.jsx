@@ -58,10 +58,10 @@ export default function Home({ treatments = [] }) {
               Mulai Konsultasi
               <ArrowRight size={18} />
             </Link>
-            <a href="#layanan" className="btn-secondary">
+            <Link to="/treatments" className="btn-secondary">
               <Scissors size={18} />
-              Lihat Layanan
-            </a>
+              Lihat Perawatan
+            </Link>
           </div>
         </div>
       </section>
@@ -90,8 +90,8 @@ export default function Home({ treatments = [] }) {
                 <span className="badge rose">{item.count} layanan</span>
                 <h3>{item.title}</h3>
                 <p>{item.desc}</p>
-                <Link to="/quiz" className="text-link">
-                  Konsultasikan
+                <Link to="/treatments" className="text-link">
+                  Lihat Perawatan
                   <ArrowRight size={16} />
                 </Link>
               </div>

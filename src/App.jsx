@@ -6,10 +6,13 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import ProfileQuiz from './pages/ProfileQuiz';
 import Recommendations from './pages/Recommendations';
+import Reserve from './pages/Reserve';
+import Treatments from './pages/Treatments';
 import AdminAttributes from './pages/admin/Attributes';
 import AdminCustomers from './pages/admin/Customers';
 import AdminDashboard from './pages/admin/Dashboard';
 import AdminInventory from './pages/admin/Inventory';
+import AdminQrScanner from './pages/admin/QrScanner';
 import { api } from './services/api';
 import { attributeCatalog as seedAttributes, treatments as seedTreatments } from './utils/recommendationEngine';
 
@@ -149,7 +152,7 @@ function App() {
     try {
       const { user } = await api.login({ email, password, role });
       setCurrentUser(user);
-      setActiveConsultationId(null);
+      if (role === 'admin') setActiveConsultationId(null);
       return { ok: true, user };
     } catch (error) {
       return { ok: false, message: error.message };
@@ -173,6 +176,12 @@ function App() {
     setConsultations([]);
   };
 
+  const handleUpdateAccount = async (payload) => {
+    const user = await api.updateCustomer(currentUser.id, payload);
+    setCurrentUser(user);
+    return user;
+  };
+
   const handleCreateConsultation = async (payload) => {
     const consultation = await api.createConsultation({
       ...payload,
@@ -184,10 +193,11 @@ function App() {
     return consultation;
   };
 
-  const handleChooseTreatment = async (consultationId, treatmentId) => {
-    const consultation = await api.chooseTreatment(consultationId, treatmentId);
-    setConsultations((current) => upsertById(current, consultation));
-    setActiveConsultationId(consultationId);
+  const handleCreateReservation = async (payload) => {
+    const reservation = await api.createReservation(payload);
+    setConsultations((current) => upsertById(current, reservation));
+    setActiveConsultationId(reservation.id);
+    return reservation;
   };
 
   const handleUpdateConsultationStatus = async (consultationId, status) => {
@@ -201,6 +211,20 @@ function App() {
       current.filter((consultation) => consultation.id !== consultationId)
     );
     if (activeConsultationId === consultationId) setActiveConsultationId(null);
+  };
+
+  const handleSaveSalonNote = async (consultationId, note) => {
+    const consultation = await api.updateSalonNote(consultationId, note);
+    setConsultations((current) => upsertById(current, consultation));
+    return consultation;
+  };
+
+  const handleScanReservation = async (code) => {
+    const result = await api.scanReservation(code);
+    if (result.reservation) {
+      setConsultations((current) => upsertById(current, result.reservation));
+    }
+    return result;
   };
 
   const handleSaveTreatment = async (payload) => {
@@ -250,6 +274,14 @@ function App() {
           }
         />
         <Route
+          path="/treatments"
+          element={
+            <PublicPage {...publicPageProps}>
+              <Treatments treatments={treatmentItems} currentUser={currentUser} />
+            </PublicPage>
+          }
+        />
+        <Route
           path="/login"
           element={
             <PublicPage {...publicPageProps}>
@@ -270,6 +302,7 @@ function App() {
                 consultations={customerConsultations}
                 treatments={treatmentItems}
                 onSelectConsultation={handleSelectConsultation}
+                onUpdateAccount={handleUpdateAccount}
               />
             </PublicPage>
           }
@@ -292,7 +325,19 @@ function App() {
               <Recommendations
                 consultation={activeConsultation}
                 treatments={treatmentItems}
-                onChooseTreatment={handleChooseTreatment}
+                currentUser={currentUser}
+              />
+            </PublicPage>
+          }
+        />
+        <Route
+          path="/reserve/:treatmentId"
+          element={
+            <PublicPage {...publicPageProps}>
+              <Reserve
+                currentUser={currentUser}
+                treatments={treatmentItems}
+                onCreateReservation={handleCreateReservation}
               />
             </PublicPage>
           }
@@ -345,8 +390,20 @@ function App() {
                 treatments={treatmentItems}
                 consultations={consultations}
                 onUpdateStatus={handleUpdateConsultationStatus}
+                onSaveSalonNote={handleSaveSalonNote}
                 onDeleteConsultation={handleDeleteConsultation}
                 onLogout={handleLogout}
+              />
+            </RequireAdmin>
+          }
+        />
+        <Route
+          path="/admin/scan"
+          element={
+            <RequireAdmin currentUser={currentUser}>
+              <AdminQrScanner
+                onLogout={handleLogout}
+                onScanReservation={handleScanReservation}
               />
             </RequireAdmin>
           }

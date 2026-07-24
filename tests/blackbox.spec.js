@@ -7,12 +7,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Blackbox Sistem Rekomendasi Salon', () => {
-  test('BB-01 beranda menampilkan identitas salon, login, dan CTA konsultasi', async ({ page }) => {
+  test('BB-01 navigasi publik menampilkan Perawatan tanpa menu Admin', async ({ page }) => {
     await page.goto(`${baseUrl}/`);
 
     await expect(page.getByText('Jharmy Salon').first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Mulai Konsultasi/ }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Login/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Perawatan' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Admin' })).toHaveCount(0);
     await expect(page.getByText('Konsultasi treatment salon')).toBeVisible();
   });
 

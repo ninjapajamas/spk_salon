@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { MessageCircle, Search, Trash2, Users } from 'lucide-react';
+import { MessageCircle, QrCode, Save, Search, Trash2, Users } from 'lucide-react';
 import AdminSidebar from '../../components/AdminSidebar';
 import { getRecommendations } from '../../utils/recommendationEngine';
 
 const statusOptions = [
+  'Rekomendasi saja',
   'Menunggu konfirmasi salon',
-  'Sudah dihubungi',
-  'Booking terjadwal',
-  'Selesai',
+  'Akan datang',
+  'Sudah melakukan perawatan',
   'Dibatalkan',
 ];
 
@@ -36,6 +36,7 @@ export default function Customers({
   consultations = [],
   treatments = [],
   onUpdateStatus,
+  onSaveSalonNote,
   onDeleteConsultation,
   onLogout,
 }) {
@@ -116,7 +117,8 @@ export default function Customers({
                       <th>Jadwal</th>
                       <th>Kebutuhan</th>
                       <th>Treatment Pilihan</th>
-                      <th>Status</th>
+                      <th>Status & QR</th>
+                      <th>Catatan Salon</th>
                       <th>Aksi</th>
                     </tr>
                   </thead>
@@ -154,6 +156,18 @@ export default function Customers({
                                 <option key={status} value={status}>{status}</option>
                               ))}
                             </select>
+                            {consultation.reservationCode && (
+                              <span className="reservation-code-small">
+                                <QrCode size={14} />
+                                {consultation.reservationCode}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <SalonNoteEditor
+                              consultation={consultation}
+                              onSave={onSaveSalonNote}
+                            />
                           </td>
                           <td>
                             <div className="action-row">
@@ -196,6 +210,39 @@ export default function Customers({
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function SalonNoteEditor({ consultation, onSave }) {
+  const [note, setNote] = useState(consultation.salonNote || '');
+  const [message, setMessage] = useState('');
+
+  const save = async () => {
+    try {
+      await onSave(consultation.id, note);
+      setMessage('Tersimpan');
+    } catch (error) {
+      setMessage(error.message || 'Gagal');
+    }
+  };
+
+  return (
+    <div className="salon-note-editor">
+      <textarea
+        value={note}
+        onChange={(event) => {
+          setNote(event.target.value);
+          setMessage('');
+        }}
+        placeholder="Catatan untuk pelanggan..."
+        rows={2}
+      />
+      <button type="button" className="text-link" onClick={save}>
+        <Save size={14} />
+        Simpan
+      </button>
+      {message && <small>{message}</small>}
     </div>
   );
 }

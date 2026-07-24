@@ -15,7 +15,7 @@ function formatVisit(customer) {
   return `${customer.visitDate}${time}`;
 }
 
-export default function Recommendations({ consultation, treatments = [], onChooseTreatment }) {
+export default function Recommendations({ consultation, treatments = [], currentUser }) {
   const navigate = useNavigate();
 
   const results = useMemo(() => {
@@ -24,9 +24,15 @@ export default function Recommendations({ consultation, treatments = [], onChoos
   }, [consultation, treatments]);
 
   const selectedTreatment =
-    results.find((item) => item.id === consultation?.selectedTreatmentId) ||
     results.find((item) => item.id === consultation?.recommendedTreatmentId) ||
     results[0];
+
+  const reservationPath = (treatmentId) => {
+    const target = `/reserve/${treatmentId}?consultation=${consultation.id}`;
+    return currentUser?.role === 'customer'
+      ? target
+      : `/login?returnTo=${encodeURIComponent(target)}`;
+  };
 
   if (!consultation) {
     return (
@@ -108,14 +114,13 @@ export default function Recommendations({ consultation, treatments = [], onChoos
                     </span>
                     <span className="badge gold">{selectedTreatment.suitabilityLabel}</span>
                   </div>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => onChooseTreatment(consultation.id, selectedTreatment.id)}
-                  >
+                  <Link className="btn-primary" to={reservationPath(selectedTreatment.id)}>
                     <CalendarCheck size={18} />
-                    Pilih & Minta Booking
-                  </button>
+                    Reservasi Perawatan
+                  </Link>
+                  {currentUser?.role !== 'customer' && (
+                    <p className="reservation-login-hint">Login pelanggan diperlukan saat reservasi.</p>
+                  )}
                 </div>
               </article>
             ) : (
@@ -151,13 +156,9 @@ export default function Recommendations({ consultation, treatments = [], onChoos
                               {treatment.duration} menit
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={() => onChooseTreatment(consultation.id, treatment.id)}
-                          >
-                            Pilih Treatment Ini
-                          </button>
+                          <Link className="btn-secondary" to={reservationPath(treatment.id)}>
+                            Reservasi Treatment Ini
+                          </Link>
                         </div>
                       </article>
                     ))}

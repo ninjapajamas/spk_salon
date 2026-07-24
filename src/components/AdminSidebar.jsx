@@ -1,4 +1,4 @@
-import { Home, LayoutDashboard, ListChecks, LogOut, Plus, Tags, Users } from 'lucide-react';
+import { Home, LayoutDashboard, ListChecks, LogOut, Plus, ScanLine, Tags, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function AdminSidebar({ onLogout }) {
@@ -10,6 +10,7 @@ export default function AdminSidebar({ onLogout }) {
     { label: 'Kelola Treatment', path: '/admin/inventory', icon: ListChecks },
     { label: 'Kelola Atribut', path: '/admin/attributes', icon: Tags },
     { label: 'Data Pelanggan', path: '/admin/users', icon: Users },
+    { label: 'Scan QR', path: '/admin/scan', icon: ScanLine },
   ];
 
   return (

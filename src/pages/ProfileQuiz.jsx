@@ -118,8 +118,8 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
           <p className="eyebrow">Konsultasi pelanggan</p>
           <h1>Data Kebutuhan Treatment</h1>
           <p>
-            Isi data pelanggan dan kondisi perawatan agar salon dapat memberi
-            rekomendasi serta menindaklanjuti jadwal kunjungan.
+            Isi kebutuhan perawatan untuk mendapat rekomendasi. Kamu tidak perlu
+            login; jadwal reservasi dipilih setelah menentukan treatment.
           </p>
         </div>
         {loggedCustomer && (
@@ -141,8 +141,8 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
               Konsultasi salon
             </div>
             <p>
-              Data ini disimpan sebagai riwayat konsultasi yang dapat dilihat
-              admin salon pada halaman pelanggan.
+              Konsultasi bebas login. Akun pelanggan baru diperlukan saat kamu
+              ingin mengamankan jadwal reservasi.
             </p>
           </div>
         </aside>
@@ -177,7 +177,7 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
                 />
               </label>
               <label className="field">
-                <span>Tanggal kunjungan</span>
+                <span>Rencana tanggal kunjungan</span>
                 <input
                   type="date"
                   value={customer.visitDate}
@@ -186,7 +186,7 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
                 />
               </label>
               <label className="field">
-                <span>Jam kunjungan</span>
+                <span>Rencana jam kunjungan</span>
                 <input
                   type="time"
                   value={customer.visitTime}

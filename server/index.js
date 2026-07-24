@@ -62,7 +62,11 @@ function toConsultation(row) {
     createdAt: row.created_at,
     status: row.status,
     recommendedTreatmentId: row.recommended_treatment_id || null,
-    selectedTreatmentId: row.selected_treatment_id || row.recommended_treatment_id || null,
+    selectedTreatmentId: row.selected_treatment_id || null,
+    reservationCode: row.reservation_code || '',
+    salonNote: row.salon_note || '',
+    reservedAt: row.reserved_at || null,
+    completedAt: row.completed_at || null,
     customer: {
       name: row.customer_name,
       phone: row.customer_phone,
@@ -133,6 +137,10 @@ const consultationsSql = `
     cp.notes,
     cp.status,
     cp.selected_treatment_id,
+    cp.reservation_code,
+    cp.salon_note,
+    cp.reserved_at,
+    cp.completed_at,
     cp.created_at,
     latest.top_treatment_id AS recommended_treatment_id
   FROM consultation_profiles cp
@@ -227,6 +235,28 @@ app.post('/api/auth/register', async (request, response) => {
   return response.status(201).json({ user: toUser(result.rows[0]) });
 });
 
+app.put('/api/users/:id', async (request, response) => {
+  const { fullName, phone, email } = request.body;
+  requireFields(request.body, ['fullName', 'phone', 'email']);
+
+  const result = await query(
+    `UPDATE users
+     SET full_name = $1, phone = $2, email = lower($3), updated_at = NOW()
+     WHERE id = $4 AND role = 'customer'
+     RETURNING id, full_name, email, phone, role`,
+    [fullName.trim(), phone.trim(), email.trim(), request.params.id]
+  ).catch((error) => {
+    if (error.code === '23505') {
+      error.statusCode = 409;
+      error.message = 'Email sudah digunakan akun lain.';
+    }
+    throw error;
+  });
+
+  if (!result.rows[0]) return response.status(404).json({ message: 'Pelanggan tidak ditemukan.' });
+  return response.json({ user: toUser(result.rows[0]) });
+});
+
 app.get('/api/attributes', async (_request, response) => {
   const result = await query(
     `SELECT id, code, label, group_name
@@ -279,6 +309,23 @@ app.delete('/api/attributes/:code', async (request, response) => {
 
 app.get('/api/treatments', async (_request, response) => {
   response.json({ treatments: await getTreatments() });
+});
+
+app.get('/api/availability', async (request, response) => {
+  const { date } = request.query;
+  if (!date) return response.status(400).json({ message: 'Tanggal wajib dipilih.' });
+
+  const result = await query(
+    `SELECT to_char(visit_time, 'HH24:MI') AS visit_time
+     FROM consultation_profiles
+     WHERE visit_date = $1
+       AND reservation_code IS NOT NULL
+       AND status NOT IN ('Dibatalkan', 'Rekomendasi saja')
+     ORDER BY visit_time`,
+    [date]
+  );
+
+  return response.json({ date, bookedTimes: result.rows.map((row) => row.visit_time) });
 });
 
 app.post('/api/treatments', async (request, response) => {
@@ -398,7 +445,7 @@ app.post('/api/consultations', async (request, response) => {
         (user_id, customer_name, customer_phone, customer_email, visit_date, visit_time,
          area, skin_type, problems, goal, history, notes, status, selected_treatment_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10, $11, $12,
-         'Menunggu konfirmasi salon', $13)
+         'Rekomendasi saja', NULL)
        RETURNING id`,
       [
         userId || null,
@@ -413,7 +460,6 @@ app.post('/api/consultations', async (request, response) => {
         preferences.goal,
         preferences.history || null,
         preferences.notes || customer.notes || null,
-        topTreatment?.id || null,
       ]
     );
 
@@ -451,7 +497,12 @@ app.put('/api/consultations/:id/status', async (request, response) => {
   requireFields(request.body, ['status']);
   const result = await query(
     `UPDATE consultation_profiles
-     SET status = $1, updated_at = NOW()
+     SET status = $1,
+         completed_at = CASE
+           WHEN $1 = 'Sudah melakukan perawatan' THEN COALESCE(completed_at, NOW())
+           ELSE completed_at
+         END,
+         updated_at = NOW()
      WHERE id = $2
      RETURNING id`,
     [request.body.status, request.params.id]
@@ -467,7 +518,6 @@ app.put('/api/consultations/:id/selected-treatment', async (request, response) =
   const result = await query(
     `UPDATE consultation_profiles
      SET selected_treatment_id = $1,
-         status = 'Menunggu konfirmasi salon',
          updated_at = NOW()
      WHERE id = $2
      RETURNING id`,
@@ -477,6 +527,187 @@ app.put('/api/consultations/:id/selected-treatment', async (request, response) =
   if (!result.rows[0]) return response.status(404).json({ message: 'Konsultasi tidak ditemukan.' });
 
   return response.json({ consultation: await getConsultationById(request.params.id) });
+});
+
+app.put('/api/consultations/:id/salon-note', async (request, response) => {
+  const result = await query(
+    `UPDATE consultation_profiles
+     SET salon_note = $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING id`,
+    [String(request.body.note || '').trim(), request.params.id]
+  );
+
+  if (!result.rows[0]) return response.status(404).json({ message: 'Konsultasi tidak ditemukan.' });
+  return response.json({ consultation: await getConsultationById(request.params.id) });
+});
+
+app.post('/api/reservations', async (request, response) => {
+  const { userId, treatmentId, visitDate, visitTime, consultationId } = request.body;
+  requireFields(request.body, ['userId', 'treatmentId', 'visitDate', 'visitTime']);
+
+  const reservation = await withTransaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${visitDate}|${visitTime}`]);
+
+    const userResult = await client.query(
+      `SELECT id, full_name, email, phone
+       FROM users
+       WHERE id = $1 AND role = 'customer'
+       LIMIT 1`,
+      [userId]
+    );
+    if (!userResult.rows[0]) {
+      const error = new Error('Login pelanggan diperlukan untuk membuat reservasi.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const treatmentResult = await client.query(
+      `SELECT id, name, category, summary
+       FROM treatments
+       WHERE id = $1 AND status = 'Tersedia'
+       LIMIT 1`,
+      [treatmentId]
+    );
+    if (!treatmentResult.rows[0]) {
+      const error = new Error('Treatment tidak tersedia.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const conflict = await client.query(
+      `SELECT id
+       FROM consultation_profiles
+       WHERE visit_date = $1
+         AND visit_time = $2
+         AND reservation_code IS NOT NULL
+         AND status NOT IN ('Dibatalkan', 'Rekomendasi saja')
+         AND ($3::uuid IS NULL OR id <> $3::uuid)
+       LIMIT 1`,
+      [visitDate, visitTime, consultationId || null]
+    );
+    if (conflict.rows[0]) {
+      const error = new Error('Jadwal tersebut sudah dibooking. Silakan pilih jam lain.');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const codeResult = await client.query(
+      `SELECT 'JHS-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12)) AS code`
+    );
+    const reservationCode = codeResult.rows[0].code;
+    const user = userResult.rows[0];
+    const treatment = treatmentResult.rows[0];
+    let reservationId = consultationId || null;
+
+    if (reservationId) {
+      const updateResult = await client.query(
+        `UPDATE consultation_profiles
+         SET user_id = $1,
+             customer_name = $2,
+             customer_phone = $3,
+             customer_email = $4,
+             visit_date = $5,
+             visit_time = $6,
+             selected_treatment_id = $7,
+             reservation_code = COALESCE(reservation_code, $8),
+             status = 'Akan datang',
+             reserved_at = COALESCE(reserved_at, NOW()),
+             updated_at = NOW()
+         WHERE id = $9
+           AND (user_id IS NULL OR user_id = $1)
+         RETURNING id`,
+        [
+          user.id,
+          user.full_name,
+          user.phone,
+          user.email,
+          visitDate,
+          visitTime,
+          treatment.id,
+          reservationCode,
+          reservationId,
+        ]
+      );
+      if (!updateResult.rows[0]) {
+        const error = new Error('Data rekomendasi tidak dapat digunakan untuk reservasi ini.');
+        error.statusCode = 403;
+        throw error;
+      }
+    } else {
+      const insertResult = await client.query(
+        `INSERT INTO consultation_profiles
+          (user_id, customer_name, customer_phone, customer_email, visit_date, visit_time,
+           area, problems, goal, history, status, selected_treatment_id,
+           reservation_code, reserved_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, '{}'::text[], $8,
+           'Reservasi langsung', 'Akan datang', $9, $10, NOW())
+         RETURNING id`,
+        [
+          user.id,
+          user.full_name,
+          user.phone,
+          user.email,
+          visitDate,
+          visitTime,
+          treatment.category,
+          treatment.summary,
+          treatment.id,
+          reservationCode,
+        ]
+      );
+      reservationId = insertResult.rows[0].id;
+    }
+
+    return getConsultationById(reservationId, client);
+  }).catch((error) => {
+    if (error.code === '23505') {
+      error.statusCode = 409;
+      error.message = 'Jadwal tersebut baru saja dibooking pelanggan lain. Silakan pilih jam lain.';
+    }
+    throw error;
+  });
+
+  return response.status(201).json({ reservation });
+});
+
+app.post('/api/reservations/scan', async (request, response) => {
+  requireFields(request.body, ['code']);
+  const normalizedCode = String(request.body.code).trim().replace(/^JHARMY:/i, '');
+
+  const existing = await query(
+    `SELECT id, status
+     FROM consultation_profiles
+     WHERE upper(reservation_code) = upper($1)
+     LIMIT 1`,
+    [normalizedCode]
+  );
+  if (!existing.rows[0]) {
+    return response.status(404).json({ valid: false, message: 'QR reservasi tidak valid.' });
+  }
+  if (existing.rows[0].status === 'Dibatalkan') {
+    return response.status(409).json({ valid: false, message: 'Reservasi sudah dibatalkan.' });
+  }
+
+  const result = await query(
+    `UPDATE consultation_profiles
+     SET status = 'Sudah melakukan perawatan',
+         completed_at = COALESCE(completed_at, NOW()),
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING id`,
+    [existing.rows[0].id]
+  );
+
+  return response.json({
+    valid: true,
+    alreadyCompleted: existing.rows[0].status === 'Sudah melakukan perawatan',
+    message:
+      existing.rows[0].status === 'Sudah melakukan perawatan'
+        ? 'QR valid dan reservasi sebelumnya sudah dikonfirmasi.'
+        : 'QR valid. Status reservasi otomatis diperbarui.',
+    reservation: await getConsultationById(result.rows[0].id),
+  });
 });
 
 app.delete('/api/consultations/:id', async (request, response) => {
