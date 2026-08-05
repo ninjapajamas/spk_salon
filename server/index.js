@@ -153,6 +153,24 @@ const consultationsSql = `
   ) latest ON true
 `;
 
+const salonSlots = new Set([
+  '09:00', '10:00', '11:00', '12:00', '13:00',
+  '14:00', '15:00', '16:00', '17:00', '18:00',
+]);
+
+function normalizeVisitTime(visitTime) {
+  return String(visitTime || '').slice(0, 5);
+}
+
+function isSalonSlot(visitTime) {
+  return salonSlots.has(normalizeVisitTime(visitTime));
+}
+
+function isPastReservationSlot(visitDate, visitTime) {
+  const slotDate = new Date(`${visitDate}T${normalizeVisitTime(visitTime)}:00+07:00`);
+  return Number.isNaN(slotDate.getTime()) || slotDate <= new Date();
+}
+
 async function getTreatments(client = null) {
   const runner = client || { query };
   const result = await runner.query(treatmentsSql());
@@ -434,8 +452,30 @@ app.post('/api/consultations', async (request, response) => {
   const { userId, customer, preferences } = request.body;
   requireFields(customer || {}, ['name', 'phone', 'visitDate', 'visitTime']);
   requireFields(preferences || {}, ['area', 'goal']);
+  if (!isSalonSlot(customer.visitTime)) {
+    return response.status(400).json({ message: 'Jam kunjungan harus sesuai jam operasional salon, pukul 09:00 sampai 18:00.' });
+  }
+  if (isPastReservationSlot(customer.visitDate, customer.visitTime)) {
+    return response.status(400).json({ message: 'Tanggal atau jam kunjungan yang sudah terlewati tidak dapat dipilih.' });
+  }
 
   const consultation = await withTransaction(async (client) => {
+    const conflict = await client.query(
+      `SELECT id
+       FROM consultation_profiles
+       WHERE visit_date = $1
+         AND visit_time = $2
+         AND reservation_code IS NOT NULL
+         AND status NOT IN ('Dibatalkan', 'Rekomendasi saja')
+       LIMIT 1`,
+      [customer.visitDate, normalizeVisitTime(customer.visitTime)]
+    );
+    if (conflict.rows[0]) {
+      const error = new Error('Jam tersebut sudah dibooking pelanggan lain. Silakan pilih jam lain.');
+      error.statusCode = 409;
+      throw error;
+    }
+
     const treatments = await getTreatments(client);
     const rankings = getRecommendations(preferences, treatments);
     const topTreatment = rankings[0] || null;
@@ -453,7 +493,7 @@ app.post('/api/consultations', async (request, response) => {
         customer.phone,
         customer.email || null,
         customer.visitDate,
-        customer.visitTime,
+        normalizeVisitTime(customer.visitTime),
         preferences.area,
         preferences.skinType || null,
         preferences.problems || [],
@@ -545,9 +585,16 @@ app.put('/api/consultations/:id/salon-note', async (request, response) => {
 app.post('/api/reservations', async (request, response) => {
   const { userId, treatmentId, visitDate, visitTime, consultationId } = request.body;
   requireFields(request.body, ['userId', 'treatmentId', 'visitDate', 'visitTime']);
+  if (!isSalonSlot(visitTime)) {
+    return response.status(400).json({ message: 'Jam reservasi harus sesuai jam operasional salon, pukul 09:00 sampai 18:00.' });
+  }
+  if (isPastReservationSlot(visitDate, visitTime)) {
+    return response.status(400).json({ message: 'Tanggal atau jam yang sudah terlewati tidak dapat dipilih.' });
+  }
 
   const reservation = await withTransaction(async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${visitDate}|${visitTime}`]);
+    const normalizedVisitTime = normalizeVisitTime(visitTime);
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${visitDate}|${normalizedVisitTime}`]);
 
     const userResult = await client.query(
       `SELECT id, full_name, email, phone
@@ -584,7 +631,7 @@ app.post('/api/reservations', async (request, response) => {
          AND status NOT IN ('Dibatalkan', 'Rekomendasi saja')
          AND ($3::uuid IS NULL OR id <> $3::uuid)
        LIMIT 1`,
-      [visitDate, visitTime, consultationId || null]
+      [visitDate, normalizedVisitTime, consultationId || null]
     );
     if (conflict.rows[0]) {
       const error = new Error('Jadwal tersebut sudah dibooking. Silakan pilih jam lain.');
@@ -623,7 +670,7 @@ app.post('/api/reservations', async (request, response) => {
           user.phone,
           user.email,
           visitDate,
-          visitTime,
+          normalizedVisitTime,
           treatment.id,
           reservationCode,
           reservationId,
@@ -649,7 +696,7 @@ app.post('/api/reservations', async (request, response) => {
           user.phone,
           user.email,
           visitDate,
-          visitTime,
+          normalizedVisitTime,
           treatment.category,
           treatment.summary,
           treatment.id,
