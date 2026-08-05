@@ -20,6 +20,16 @@ function resolveTreatment(consultation, treatments) {
   );
 }
 
+function resolveTreatments(consultation, treatments) {
+  const ids = consultation.selectedTreatmentIds?.length
+    ? consultation.selectedTreatmentIds
+    : [consultation.selectedTreatmentId].filter(Boolean);
+  const selected = ids
+    .map((id) => treatments.find((item) => item.id === id))
+    .filter(Boolean);
+  return selected.length ? selected : [resolveTreatment(consultation, treatments)].filter(Boolean);
+}
+
 function formatDateTime(customer) {
   if (!customer?.visitDate) return '-';
   return `${customer.visitDate}${customer.visitTime ? `, ${customer.visitTime}` : ''}`;
@@ -48,6 +58,7 @@ export default function Customers({
 
     return consultations.filter((consultation) => {
       const treatment = resolveTreatment(consultation, treatments);
+      const selectedTreatments = resolveTreatments(consultation, treatments);
       return [
         consultation.customer.name,
         consultation.customer.phone,
@@ -55,6 +66,7 @@ export default function Customers({
         consultation.preferences.goal,
         consultation.status,
         treatment?.name,
+        selectedTreatments.map((item) => item.name).join(' '),
       ]
         .join(' ')
         .toLowerCase()
@@ -124,7 +136,7 @@ export default function Customers({
                   </thead>
                   <tbody>
                     {filteredConsultations.map((consultation) => {
-                      const treatment = resolveTreatment(consultation, treatments);
+                      const selectedTreatments = resolveTreatments(consultation, treatments);
                       return (
                         <tr key={consultation.id}>
                           <td>
@@ -145,7 +157,7 @@ export default function Customers({
                               <span>{consultation.preferences.goal}</span>
                             </div>
                           </td>
-                          <td>{treatment?.name || '-'}</td>
+                          <td>{selectedTreatments.map((item) => item.name).join(', ') || '-'}</td>
                           <td>
                             <select
                               className="status-select"

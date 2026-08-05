@@ -7,6 +7,7 @@ import { profileOptions } from '../utils/recommendationEngine';
 const slots = [
   '09:00', '10:00', '11:00', '12:00', '13:00',
   '14:00', '15:00', '16:00', '17:00', '18:00',
+  '19:00', '20:00', '21:00',
 ];
 
 const problemsByArea = {
@@ -42,6 +43,10 @@ function isValidSalonSlot(time) {
   return slots.includes(time);
 }
 
+function mergeOptions(values) {
+  return Array.from(new Set(values.flat().filter(Boolean)));
+}
+
 export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   const navigate = useNavigate();
   const loggedCustomer = currentUser?.role === 'customer' ? currentUser : null;
@@ -54,7 +59,7 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   });
   const [bookedTimes, setBookedTimes] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
-  const [area, setArea] = useState('Wajah');
+  const [areas, setAreas] = useState(['Wajah']);
   const [skinType, setSkinType] = useState('');
   const [problems, setProblems] = useState([]);
   const [goal, setGoal] = useState('');
@@ -62,8 +67,12 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const visibleProblems = problemsByArea[area] || profileOptions.problems;
-  const visibleGoals = goalsByArea[area] || profileOptions.goals;
+  const visibleProblems = areas.length
+    ? mergeOptions(areas.map((item) => problemsByArea[item] || profileOptions.problems))
+    : profileOptions.problems;
+  const visibleGoals = areas.length
+    ? mergeOptions(areas.map((item) => goalsByArea[item] || profileOptions.goals))
+    : profileOptions.goals;
   const unavailable = useMemo(() => new Set(bookedTimes), [bookedTimes]);
 
   useEffect(() => {
@@ -99,10 +108,16 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   };
 
   const handleAreaChange = (nextArea) => {
-    setArea(nextArea);
+    setAreas((current) => {
+      const exists = current.includes(nextArea);
+      const nextAreas = exists
+        ? current.filter((item) => item !== nextArea)
+        : [...current, nextArea];
+      return nextAreas.length ? nextAreas : [nextArea];
+    });
     setProblems([]);
     setGoal('');
-    if (nextArea !== 'Wajah') {
+    if (nextArea === 'Wajah' && areas.includes('Wajah')) {
       setSkinType('');
     }
   };
@@ -119,8 +134,13 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (area === 'Wajah' && !skinType) {
+    if (areas.includes('Wajah') && !skinType) {
       setError('Pilih jenis kulit wajah pelanggan terlebih dahulu.');
+      return;
+    }
+
+    if (!areas.length) {
+      setError('Pilih minimal satu area perawatan.');
       return;
     }
 
@@ -140,7 +160,7 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
     }
 
     if (!isValidSalonSlot(customer.visitTime)) {
-      setError('Jam kunjungan harus sesuai jam operasional salon, pukul 09:00 sampai 18:00.');
+      setError('Jam kunjungan harus sesuai jam operasional salon, pukul 09:00 sampai 21:00.');
       return;
     }
 
@@ -165,8 +185,9 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
           email: loggedCustomer?.email || '',
         },
         preferences: {
-          area,
-          skinType: area === 'Wajah' ? skinType : '',
+          area: areas.join(', '),
+          areas,
+          skinType: areas.includes('Wajah') ? skinType : '',
           problems,
           goal,
           history,
@@ -303,8 +324,8 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
                 <button
                   key={type}
                   type="button"
-                  aria-pressed={area === type}
-                  className={area === type ? 'choice-button active' : 'choice-button'}
+                  aria-pressed={areas.includes(type)}
+                  className={areas.includes(type) ? 'choice-button active' : 'choice-button'}
                   onClick={() => handleAreaChange(type)}
                 >
                   {type}
@@ -313,7 +334,7 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
             </div>
           </section>
 
-          {area === 'Wajah' && (
+          {areas.includes('Wajah') && (
             <section>
               <label className="field">
                 <span>Jenis kulit wajah</span>

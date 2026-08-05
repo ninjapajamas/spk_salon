@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowRight, CalendarCheck, Clock, Phone, RefreshCw, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getRecommendations } from '../utils/recommendationEngine';
@@ -17,6 +17,7 @@ function formatVisit(customer) {
 
 export default function Recommendations({ consultation, treatments = [], currentUser }) {
   const navigate = useNavigate();
+  const [selectedTreatmentIds, setSelectedTreatmentIds] = useState(null);
 
   const results = useMemo(() => {
     if (!consultation) return [];
@@ -26,12 +27,30 @@ export default function Recommendations({ consultation, treatments = [], current
   const selectedTreatment =
     results.find((item) => item.id === consultation?.recommendedTreatmentId) ||
     results[0];
+  const effectiveSelectedIds = selectedTreatmentIds?.length
+    ? selectedTreatmentIds
+    : [selectedTreatment?.id].filter(Boolean);
 
-  const reservationPath = (treatmentId) => {
-    const target = `/reserve/${treatmentId}?consultation=${consultation.id}`;
+  const reservationPath = (treatmentIds = effectiveSelectedIds) => {
+    const rawIds = Array.isArray(treatmentIds) ? treatmentIds : [treatmentIds];
+    const ids = Array.from(new Set(rawIds.filter(Boolean)));
+    const params = new URLSearchParams({ consultation: consultation.id });
+    if (ids.length > 1) params.set('treatments', ids.join(','));
+    const target = `/reserve/${ids[0]}?${params.toString()}`;
     return currentUser?.role === 'customer'
       ? target
       : `/login?returnTo=${encodeURIComponent(target)}`;
+  };
+
+  const toggleTreatment = (treatmentId) => {
+    setSelectedTreatmentIds((current) => {
+      const base = current || [selectedTreatment?.id].filter(Boolean);
+      if (base.includes(treatmentId)) {
+        const next = base.filter((id) => id !== treatmentId);
+        return next.length ? next : [];
+      }
+      return [...base, treatmentId];
+    });
   };
 
   if (!consultation) {
@@ -82,7 +101,9 @@ export default function Recommendations({ consultation, treatments = [], current
             <ProfileLine label="Jadwal" value={formatVisit(consultation.customer)} />
             <ProfileLine label="Status" value={consultation.status} />
             <div className="profile-tags">
-              <span>{consultation.preferences.area}</span>
+              {(consultation.preferences.areas || [consultation.preferences.area]).map((area) => (
+                <span key={area}>{area}</span>
+              ))}
               {consultation.preferences.skinType && <span>{consultation.preferences.skinType}</span>}
               {consultation.preferences.problems.map((problem) => (
                 <span key={problem}>{problem}</span>
@@ -137,6 +158,10 @@ export default function Recommendations({ consultation, treatments = [], current
                     <p className="eyebrow">Urutan perhitungan</p>
                     <h2>Semua Perawatan Berdasarkan Skor Rekomendasi</h2>
                   </div>
+                  <Link className="btn-primary" to={reservationPath()}>
+                    <CalendarCheck size={18} />
+                    Reservasi {effectiveSelectedIds.length} Perawatan
+                  </Link>
                 </div>
 
                 <div className="alternative-grid">
@@ -162,6 +187,14 @@ export default function Recommendations({ consultation, treatments = [], current
                           <Link className="btn-secondary" to={reservationPath(treatment.id)}>
                             Reservasi Treatment Ini
                           </Link>
+                          <label className="checkbox-pill">
+                            <input
+                              type="checkbox"
+                              checked={effectiveSelectedIds.includes(treatment.id)}
+                              onChange={() => toggleTreatment(treatment.id)}
+                            />
+                            Pilih untuk reservasi gabungan
+                          </label>
                         </div>
                       </article>
                     ))}

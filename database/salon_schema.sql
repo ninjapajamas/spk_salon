@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS consultation_profiles (
   notes TEXT,
   status VARCHAR(50) NOT NULL DEFAULT 'Rekomendasi saja',
   selected_treatment_id UUID REFERENCES treatments(id) ON DELETE SET NULL,
+  selected_treatment_ids UUID[] NOT NULL DEFAULT '{}',
   reservation_code VARCHAR(80) UNIQUE,
   salon_note TEXT,
   reserved_at TIMESTAMPTZ,
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS consultation_profiles (
 
 ALTER TABLE consultation_profiles
   ADD COLUMN IF NOT EXISTS reservation_code VARCHAR(80) UNIQUE,
+  ADD COLUMN IF NOT EXISTS selected_treatment_ids UUID[] NOT NULL DEFAULT '{}',
   ADD COLUMN IF NOT EXISTS salon_note TEXT,
   ADD COLUMN IF NOT EXISTS reserved_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;

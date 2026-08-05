@@ -41,6 +41,20 @@ function resolveTreatment(consultation, treatments) {
   );
 }
 
+function resolveTreatments(consultation, treatments) {
+  const ids = consultation.selectedTreatmentIds?.length
+    ? consultation.selectedTreatmentIds
+    : [consultation.selectedTreatmentId].filter(Boolean);
+  const selected = ids
+    .map((id) => treatments.find((item) => item.id === id))
+    .filter(Boolean);
+  return selected.length ? selected : [resolveTreatment(consultation, treatments)].filter(Boolean);
+}
+
+function treatmentNames(items) {
+  return items.map((item) => item.name).join(', ') || 'Perawatan Jharmy Salon';
+}
+
 function reservationBucket(reservation) {
   if (reservation.status === 'Sudah melakukan perawatan') return 'completed';
   if (reservation.status === 'Dibatalkan') return 'cancelled';
@@ -139,6 +153,7 @@ export default function CustomerDashboard({
         <div className="reservation-list">
           {items.map((reservation) => {
             const treatment = resolveTreatment(reservation, treatments);
+            const reservationTreatments = resolveTreatments(reservation, treatments);
             const showQr = openQrId === reservation.id;
             return (
               <article key={reservation.id} className="reservation-dashboard-card">
@@ -147,9 +162,13 @@ export default function CustomerDashboard({
                   <div className="reservation-card-title">
                     <div>
                       <span className="badge rose">{reservation.status}</span>
-                      <h3>{treatment?.name || 'Perawatan Jharmy Salon'}</h3>
+                      <h3>{treatmentNames(reservationTreatments)}</h3>
                     </div>
-                    <strong>{treatment ? currency.format(treatment.price) : '-'}</strong>
+                    <strong>
+                      {reservationTreatments.length
+                        ? currency.format(reservationTreatments.reduce((sum, item) => sum + item.price, 0))
+                        : '-'}
+                    </strong>
                   </div>
                   <div className="reservation-card-meta">
                     <span><CalendarCheck size={16} /> {formatDate(reservation.customer.visitDate)}</span>
@@ -221,7 +240,7 @@ export default function CustomerDashboard({
           <section className="next-treatment-banner">
             <div>
               <span className="badge gold">Perawatan berikutnya</span>
-              <h2>{resolveTreatment(nextReservation, treatments)?.name}</h2>
+              <h2>{treatmentNames(resolveTreatments(nextReservation, treatments))}</h2>
               <p>{formatDate(nextReservation.customer.visitDate)} pukul {nextReservation.customer.visitTime}</p>
             </div>
             <CalendarCheck size={42} />
@@ -306,7 +325,7 @@ export default function CustomerDashboard({
                   className="recommendation-history-row"
                   onClick={() => openConsultation(consultation.id)}
                 >
-                  <span>{consultation.preferences.area}</span>
+                  <span>{(consultation.preferences.areas || [consultation.preferences.area]).join(', ')}</span>
                   <strong>{resolveTreatment(consultation, treatments)?.name || 'Lihat rekomendasi'}</strong>
                   <small>{formatDate(consultation.customer.visitDate)}</small>
                 </button>

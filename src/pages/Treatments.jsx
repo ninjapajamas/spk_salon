@@ -10,6 +10,7 @@ const currency = new Intl.NumberFormat('id-ID', {
 
 export default function Treatments({ treatments = [], currentUser }) {
   const [category, setCategory] = useState('Semua');
+  const [selectedIds, setSelectedIds] = useState([]);
   const activeTreatments = useMemo(
     () => treatments.filter((item) => item.status !== 'Tidak tersedia'),
     [treatments]
@@ -20,11 +21,22 @@ export default function Treatments({ treatments = [], currentUser }) {
       ? activeTreatments
       : activeTreatments.filter((item) => item.category === category);
 
-  const reservationPath = (treatmentId) => {
-    const target = `/reserve/${treatmentId}`;
+  const reservationPath = (treatmentIds) => {
+    const ids = Array.isArray(treatmentIds) ? treatmentIds : [treatmentIds];
+    const target = ids.length > 1
+      ? `/reserve/${ids[0]}?treatments=${encodeURIComponent(ids.join(','))}`
+      : `/reserve/${ids[0]}`;
     return currentUser?.role === 'customer'
       ? target
       : `/login?returnTo=${encodeURIComponent(target)}`;
+  };
+
+  const toggleSelected = (treatmentId) => {
+    setSelectedIds((current) =>
+      current.includes(treatmentId)
+        ? current.filter((id) => id !== treatmentId)
+        : [...current, treatmentId]
+    );
   };
 
   return (
@@ -60,6 +72,16 @@ export default function Treatments({ treatments = [], currentUser }) {
           ))}
         </div>
 
+        {selectedIds.length > 0 && (
+          <div className="selection-toolbar">
+            <span>{selectedIds.length} perawatan dipilih</span>
+            <Link to={reservationPath(selectedIds)} className="btn-primary">
+              Reservasi Gabungan
+              <ArrowRight size={17} />
+            </Link>
+          </div>
+        )}
+
         <div className="treatment-catalog-grid">
           {visibleTreatments.map((treatment) => (
             <article key={treatment.id} className="catalog-card">
@@ -84,6 +106,14 @@ export default function Treatments({ treatments = [], currentUser }) {
                     <ArrowRight size={17} />
                   </Link>
                 </div>
+                <label className="checkbox-pill">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(treatment.id)}
+                    onChange={() => toggleSelected(treatment.id)}
+                  />
+                  Pilih untuk reservasi gabungan
+                </label>
               </div>
             </article>
           ))}

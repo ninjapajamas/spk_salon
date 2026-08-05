@@ -56,6 +56,14 @@ function toTreatment(row) {
 }
 
 function toConsultation(row) {
+  const selectedTreatmentIds = Array.isArray(row.selected_treatment_ids)
+    ? row.selected_treatment_ids
+    : [];
+  const areaItems = String(row.area || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -63,6 +71,9 @@ function toConsultation(row) {
     status: row.status,
     recommendedTreatmentId: row.recommended_treatment_id || null,
     selectedTreatmentId: row.selected_treatment_id || null,
+    selectedTreatmentIds: selectedTreatmentIds.length
+      ? selectedTreatmentIds
+      : [row.selected_treatment_id].filter(Boolean),
     reservationCode: row.reservation_code || '',
     salonNote: row.salon_note || '',
     reservedAt: row.reserved_at || null,
@@ -77,6 +88,7 @@ function toConsultation(row) {
     },
     preferences: {
       area: row.area,
+      areas: areaItems.length ? areaItems : [row.area].filter(Boolean),
       skinType: row.skin_type || '',
       problems: row.problems || [],
       goal: row.goal,
@@ -137,6 +149,7 @@ const consultationsSql = `
     cp.notes,
     cp.status,
     cp.selected_treatment_id,
+    cp.selected_treatment_ids,
     cp.reservation_code,
     cp.salon_note,
     cp.reserved_at,
@@ -156,6 +169,7 @@ const consultationsSql = `
 const salonSlots = new Set([
   '09:00', '10:00', '11:00', '12:00', '13:00',
   '14:00', '15:00', '16:00', '17:00', '18:00',
+  '19:00', '20:00', '21:00',
 ]);
 
 function normalizeVisitTime(visitTime) {
@@ -169,6 +183,13 @@ function isSalonSlot(visitTime) {
 function isPastReservationSlot(visitDate, visitTime) {
   const slotDate = new Date(`${visitDate}T${normalizeVisitTime(visitTime)}:00+07:00`);
   return Number.isNaN(slotDate.getTime()) || slotDate <= new Date();
+}
+
+async function ensureDatabaseShape() {
+  await query(`
+    ALTER TABLE consultation_profiles
+      ADD COLUMN IF NOT EXISTS selected_treatment_ids UUID[] NOT NULL DEFAULT '{}'
+  `);
 }
 
 async function getTreatments(client = null) {
@@ -451,9 +472,12 @@ app.get('/api/consultations/:id', async (request, response) => {
 app.post('/api/consultations', async (request, response) => {
   const { userId, customer, preferences } = request.body;
   requireFields(customer || {}, ['name', 'phone', 'visitDate', 'visitTime']);
-  requireFields(preferences || {}, ['area', 'goal']);
+  const selectedAreas = Array.isArray(preferences?.areas)
+    ? preferences.areas.filter(Boolean)
+    : [preferences?.area].filter(Boolean);
+  requireFields({ ...preferences, area: selectedAreas[0] }, ['area', 'goal']);
   if (!isSalonSlot(customer.visitTime)) {
-    return response.status(400).json({ message: 'Jam kunjungan harus sesuai jam operasional salon, pukul 09:00 sampai 18:00.' });
+    return response.status(400).json({ message: 'Jam kunjungan harus sesuai jam operasional salon, pukul 09:00 sampai 21:00.' });
   }
   if (isPastReservationSlot(customer.visitDate, customer.visitTime)) {
     return response.status(400).json({ message: 'Tanggal atau jam kunjungan yang sudah terlewati tidak dapat dipilih.' });
@@ -494,7 +518,7 @@ app.post('/api/consultations', async (request, response) => {
         customer.email || null,
         customer.visitDate,
         normalizeVisitTime(customer.visitTime),
-        preferences.area,
+        selectedAreas.join(', '),
         preferences.skinType || null,
         preferences.problems || [],
         preferences.goal,
@@ -583,10 +607,13 @@ app.put('/api/consultations/:id/salon-note', async (request, response) => {
 });
 
 app.post('/api/reservations', async (request, response) => {
-  const { userId, treatmentId, visitDate, visitTime, consultationId } = request.body;
-  requireFields(request.body, ['userId', 'treatmentId', 'visitDate', 'visitTime']);
+  const { userId, treatmentId, treatmentIds, visitDate, visitTime, consultationId } = request.body;
+  const normalizedTreatmentIds = Array.from(
+    new Set((Array.isArray(treatmentIds) && treatmentIds.length ? treatmentIds : [treatmentId]).filter(Boolean))
+  );
+  requireFields({ ...request.body, treatmentId: normalizedTreatmentIds[0] }, ['userId', 'treatmentId', 'visitDate', 'visitTime']);
   if (!isSalonSlot(visitTime)) {
-    return response.status(400).json({ message: 'Jam reservasi harus sesuai jam operasional salon, pukul 09:00 sampai 18:00.' });
+    return response.status(400).json({ message: 'Jam reservasi harus sesuai jam operasional salon, pukul 09:00 sampai 21:00.' });
   }
   if (isPastReservationSlot(visitDate, visitTime)) {
     return response.status(400).json({ message: 'Tanggal atau jam yang sudah terlewati tidak dapat dipilih.' });
@@ -612,11 +639,11 @@ app.post('/api/reservations', async (request, response) => {
     const treatmentResult = await client.query(
       `SELECT id, name, category, summary
        FROM treatments
-       WHERE id = $1 AND status = 'Tersedia'
-       LIMIT 1`,
-      [treatmentId]
+       WHERE id = ANY($1::uuid[]) AND status = 'Tersedia'
+       ORDER BY array_position($1::uuid[], id)`,
+      [normalizedTreatmentIds]
     );
-    if (!treatmentResult.rows[0]) {
+    if (treatmentResult.rows.length !== normalizedTreatmentIds.length) {
       const error = new Error('Treatment tidak tersedia.');
       error.statusCode = 404;
       throw error;
@@ -644,7 +671,10 @@ app.post('/api/reservations', async (request, response) => {
     );
     const reservationCode = codeResult.rows[0].code;
     const user = userResult.rows[0];
-    const treatment = treatmentResult.rows[0];
+    const treatments = treatmentResult.rows;
+    const primaryTreatment = treatments[0];
+    const treatmentLabels = treatments.map((item) => item.summary).join(', ');
+    const treatmentCategories = Array.from(new Set(treatments.map((item) => item.category))).join(', ');
     let reservationId = consultationId || null;
 
     if (reservationId) {
@@ -657,11 +687,12 @@ app.post('/api/reservations', async (request, response) => {
              visit_date = $5,
              visit_time = $6,
              selected_treatment_id = $7,
-             reservation_code = COALESCE(reservation_code, $8),
+             selected_treatment_ids = $8::uuid[],
+             reservation_code = COALESCE(reservation_code, $9),
              status = 'Akan datang',
              reserved_at = COALESCE(reserved_at, NOW()),
              updated_at = NOW()
-         WHERE id = $9
+         WHERE id = $10
            AND (user_id IS NULL OR user_id = $1)
          RETURNING id`,
         [
@@ -671,7 +702,8 @@ app.post('/api/reservations', async (request, response) => {
           user.email,
           visitDate,
           normalizedVisitTime,
-          treatment.id,
+          primaryTreatment.id,
+          normalizedTreatmentIds,
           reservationCode,
           reservationId,
         ]
@@ -686,9 +718,9 @@ app.post('/api/reservations', async (request, response) => {
         `INSERT INTO consultation_profiles
           (user_id, customer_name, customer_phone, customer_email, visit_date, visit_time,
            area, problems, goal, history, status, selected_treatment_id,
-           reservation_code, reserved_at)
+           selected_treatment_ids, reservation_code, reserved_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, '{}'::text[], $8,
-           'Reservasi langsung', 'Akan datang', $9, $10, NOW())
+           'Reservasi langsung', 'Akan datang', $9, $10::uuid[], $11, NOW())
          RETURNING id`,
         [
           user.id,
@@ -697,9 +729,10 @@ app.post('/api/reservations', async (request, response) => {
           user.email,
           visitDate,
           normalizedVisitTime,
-          treatment.category,
-          treatment.summary,
-          treatment.id,
+          treatmentCategories,
+          treatmentLabels,
+          primaryTreatment.id,
+          normalizedTreatmentIds,
           reservationCode,
         ]
       );
@@ -789,6 +822,13 @@ app.use((error, _request, response, next) => {
   response.status(status).json({ message });
 });
 
-app.listen(port, () => {
-  console.log(`API salon berjalan di http://127.0.0.1:${port}`);
-});
+ensureDatabaseShape()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`API salon berjalan di http://127.0.0.1:${port}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Gagal menyiapkan database.', error);
+    process.exit(1);
+  });

@@ -7,6 +7,7 @@ import { api } from '../services/api';
 const slots = [
   '09:00', '10:00', '11:00', '12:00', '13:00',
   '14:00', '15:00', '16:00', '17:00', '18:00',
+  '19:00', '20:00', '21:00',
 ];
 
 const currency = new Intl.NumberFormat('id-ID', {
@@ -36,7 +37,22 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
   const { treatmentId } = useParams();
   const [searchParams] = useSearchParams();
   const consultationId = searchParams.get('consultation') || null;
-  const treatment = treatments.find((item) => String(item.id) === String(treatmentId));
+  const selectedIds = useMemo(() => {
+    const fromQuery = (searchParams.get('treatments') || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return Array.from(new Set([...(fromQuery.length ? fromQuery : [treatmentId])]));
+  }, [searchParams, treatmentId]);
+  const selectedTreatments = useMemo(
+    () => selectedIds
+      .map((id) => treatments.find((item) => String(item.id) === String(id)))
+      .filter(Boolean),
+    [selectedIds, treatments]
+  );
+  const treatment = selectedTreatments[0];
+  const totalPrice = selectedTreatments.reduce((sum, item) => sum + Number(item.price || 0), 0);
+  const totalDuration = selectedTreatments.reduce((sum, item) => sum + Number(item.duration || 0), 0);
   const [visitDate, setVisitDate] = useState(todayInputValue());
   const [visitTime, setVisitTime] = useState('');
   const [bookedTimes, setBookedTimes] = useState([]);
@@ -106,7 +122,8 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
       setError('');
       const created = await onCreateReservation({
         userId: currentUser.id,
-        treatmentId: treatment.id,
+        treatmentId: selectedTreatments[0].id,
+        treatmentIds: selectedTreatments.map((item) => item.id),
         visitDate,
         visitTime,
         consultationId,
@@ -127,7 +144,7 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
       <div className="page-heading split">
         <div>
           <p className="eyebrow">Reservasi perawatan</p>
-          <h1>Pilih jadwal untuk {treatment.name}</h1>
+          <h1>Pilih jadwal untuk {selectedTreatments.length} perawatan</h1>
           <p>Jam yang sudah dipesan otomatis dinonaktifkan agar tidak terjadi booking ganda.</p>
         </div>
         <span className="secure-chip"><LockKeyhole size={16} /> Login sebagai {currentUser.fullName}</span>
@@ -137,12 +154,12 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
         <article className="reservation-treatment-card">
           <img src={treatment.image} alt={treatment.name} />
           <div>
-            <span className="badge rose">{treatment.category}</span>
-            <h2>{treatment.name}</h2>
-            <p>{treatment.description}</p>
+            <span className="badge rose">{selectedTreatments.length} perawatan dipilih</span>
+            <h2>{selectedTreatments.map((item) => item.name).join(', ')}</h2>
+            <p>{selectedTreatments.map((item) => item.summary || item.articleDescription).join(' + ')}</p>
             <div className="treatment-meta">
-              <strong>{currency.format(treatment.price)}</strong>
-              <span><Clock size={16} /> {treatment.duration} menit</span>
+              <strong>{currency.format(totalPrice)}</strong>
+              <span><Clock size={16} /> {totalDuration} menit total</span>
             </div>
           </div>
         </article>
@@ -221,7 +238,7 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
             <p className="eyebrow">Reservasi berhasil</p>
             <h2 id="reservation-success-title">Jadwalmu sudah tersimpan</h2>
             <p>
-              {treatment.name} pada {reservation.customer.visitDate}, pukul{' '}
+              {selectedTreatments.map((item) => item.name).join(', ')} pada {reservation.customer.visitDate}, pukul{' '}
               {reservation.customer.visitTime}. Tunjukkan QR berikut saat datang.
             </p>
             <div className="qr-panel">

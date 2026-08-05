@@ -20,6 +20,16 @@ function resolveTreatment(consultation, treatments) {
   );
 }
 
+function resolveTreatments(consultation, treatments) {
+  const ids = consultation.selectedTreatmentIds?.length
+    ? consultation.selectedTreatmentIds
+    : [consultation.selectedTreatmentId].filter(Boolean);
+  const selected = ids
+    .map((id) => treatments.find((item) => item.id === id))
+    .filter(Boolean);
+  return selected.length ? selected : [resolveTreatment(consultation, treatments)].filter(Boolean);
+}
+
 export default function Dashboard({ treatments = [], consultations = [], onLogout }) {
   const activeTreatments = treatments.filter((item) => item.status !== 'Tidak tersedia');
   const uniqueCustomers = new Set(
@@ -35,10 +45,11 @@ export default function Dashboard({ treatments = [], consultations = [], onLogou
 
   const popularTreatments = Object.entries(
     consultations.reduce((result, consultation) => {
-      const treatment = resolveTreatment(consultation, treatments);
-      if (!treatment) return result;
-      const key = String(treatment.id);
-      return { ...result, [key]: (result[key] || 0) + 1 };
+      const selectedTreatments = resolveTreatments(consultation, treatments);
+      return selectedTreatments.reduce((current, treatment) => {
+        const key = String(treatment.id);
+        return { ...current, [key]: (current[key] || 0) + 1 };
+      }, result);
     }, {})
   )
     .map(([id, count]) => ({
@@ -98,7 +109,7 @@ export default function Dashboard({ treatments = [], consultations = [], onLogou
             {recentConsultations.length ? (
               <div className="consultation-list">
                 {recentConsultations.map((consultation) => {
-                  const treatment = resolveTreatment(consultation, treatments);
+                  const selectedTreatments = resolveTreatments(consultation, treatments);
                   return (
                     <article key={consultation.id} className="consultation-item">
                       <div className="customer-initial">
@@ -107,7 +118,7 @@ export default function Dashboard({ treatments = [], consultations = [], onLogou
                       <div>
                         <h3>{consultation.customer.name}</h3>
                         <p>
-                          {treatment?.name || 'Belum ada rekomendasi'} - {consultation.preferences.area}
+                          {selectedTreatments.map((item) => item.name).join(', ') || 'Belum ada rekomendasi'} - {consultation.preferences.area}
                         </p>
                         <span>{formatDate(consultation.createdAt)}</span>
                       </div>

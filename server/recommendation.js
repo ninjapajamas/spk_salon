@@ -1,7 +1,11 @@
 export function buildUserAttributes(preferences = {}) {
   const userAttributes = [];
 
-  if (preferences.area) userAttributes.push(preferences.area);
+  if (Array.isArray(preferences.areas)) {
+    userAttributes.push(...preferences.areas);
+  } else if (preferences.area) {
+    userAttributes.push(...String(preferences.area).split(',').map((item) => item.trim()));
+  }
   if (preferences.skinType) userAttributes.push(preferences.skinType);
   if (Array.isArray(preferences.problems)) userAttributes.push(...preferences.problems);
   if (preferences.goal) userAttributes.push(preferences.goal);
