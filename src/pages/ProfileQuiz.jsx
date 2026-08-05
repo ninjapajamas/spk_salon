@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CalendarClock, ClipboardList, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { profileOptions } from '../utils/recommendationEngine';
+
+const slots = [
+  '09:00', '10:00', '11:00', '12:00', '13:00',
+  '14:00', '15:00', '16:00', '17:00', '18:00',
+];
 
 const problemsByArea = {
   Wajah: ['Komedo', 'Kulit kusam', 'Kulit berminyak', 'Wajah lelah'],
@@ -23,6 +29,19 @@ function todayInputValue() {
   return now.toISOString().slice(0, 10);
 }
 
+function isPastDate(value) {
+  return Boolean(value) && value < todayInputValue();
+}
+
+function isPastVisitTime(date, time) {
+  if (!date || !time || date !== todayInputValue()) return false;
+  return new Date(`${date}T${time}:00`) <= new Date();
+}
+
+function isValidSalonSlot(time) {
+  return slots.includes(time);
+}
+
 export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
   const navigate = useNavigate();
   const loggedCustomer = currentUser?.role === 'customer' ? currentUser : null;
@@ -30,9 +49,11 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
     name: loggedCustomer?.fullName || '',
     phone: loggedCustomer?.phone || '',
     visitDate: todayInputValue(),
-    visitTime: '10:00',
+    visitTime: '',
     notes: '',
   });
+  const [bookedTimes, setBookedTimes] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(true);
   const [area, setArea] = useState('Wajah');
   const [skinType, setSkinType] = useState('');
   const [problems, setProblems] = useState([]);
@@ -43,9 +64,38 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
 
   const visibleProblems = problemsByArea[area] || profileOptions.problems;
   const visibleGoals = goalsByArea[area] || profileOptions.goals;
+  const unavailable = useMemo(() => new Set(bookedTimes), [bookedTimes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getAvailability(customer.visitDate)
+      .then((data) => {
+        if (!cancelled) setBookedTimes(data.bookedTimes);
+      })
+      .catch((availabilityError) => {
+        if (!cancelled) setError(availabilityError.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSlots(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customer.visitDate]);
 
   const updateCustomer = (field, value) => {
-    setCustomer((current) => ({ ...current, [field]: value }));
+    setCustomer((current) => ({
+      ...current,
+      [field]: field === 'visitDate' && isPastDate(value) ? todayInputValue() : value,
+      ...(field === 'visitDate' ? { visitTime: '' } : {}),
+    }));
+    if (field === 'visitDate') {
+      setBookedTimes([]);
+      setLoadingSlots(true);
+    }
+    setError('');
   };
 
   const handleAreaChange = (nextArea) => {
@@ -81,6 +131,26 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
 
     if (!goal) {
       setError('Pilih tujuan perawatan pelanggan.');
+      return;
+    }
+
+    if (!customer.visitTime) {
+      setError('Pilih salah satu jam kunjungan yang masih tersedia.');
+      return;
+    }
+
+    if (!isValidSalonSlot(customer.visitTime)) {
+      setError('Jam kunjungan harus sesuai jam operasional salon, pukul 09:00 sampai 18:00.');
+      return;
+    }
+
+    if (unavailable.has(customer.visitTime)) {
+      setError('Jam tersebut sudah dibooking pelanggan lain. Silakan pilih jam lain.');
+      return;
+    }
+
+    if (isPastDate(customer.visitDate) || isPastVisitTime(customer.visitDate, customer.visitTime)) {
+      setError('Tanggal atau jam kunjungan yang sudah terlewati tidak dapat dipilih.');
       return;
     }
 
@@ -180,21 +250,50 @@ export default function ProfileQuiz({ currentUser, onCreateConsultation }) {
                 <span>Rencana tanggal kunjungan</span>
                 <input
                   type="date"
+                  min={todayInputValue()}
                   value={customer.visitDate}
                   onChange={(event) => updateCustomer('visitDate', event.target.value)}
                   required
                 />
               </label>
-              <label className="field">
-                <span>Rencana jam kunjungan</span>
-                <input
-                  type="time"
-                  value={customer.visitTime}
-                  onChange={(event) => updateCustomer('visitTime', event.target.value)}
-                  required
-                />
-              </label>
             </div>
+            <div className="form-section-title">
+              <CalendarClock size={18} />
+              Rencana jam kunjungan
+            </div>
+            {loadingSlots ? (
+              <p className="muted">Memeriksa jam yang masih tersedia...</p>
+            ) : (
+              <div className="slot-grid">
+                {slots.map((slot) => {
+                  const isBooked = unavailable.has(slot);
+                  const isExpired = isPastVisitTime(customer.visitDate, slot);
+                  const isDisabled = isBooked || isExpired;
+
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      className={customer.visitTime === slot ? 'slot-button active' : 'slot-button'}
+                      disabled={isDisabled}
+                      onClick={() => updateCustomer('visitTime', slot)}
+                      aria-label={
+                        isBooked
+                          ? `${slot} sudah dibooking`
+                          : isExpired
+                            ? `${slot} sudah terlewati`
+                            : `${slot} tersedia`
+                      }
+                    >
+                      <strong>{slot}</strong>
+                      <span>
+                        {isBooked ? 'Sudah dibooking' : isExpired ? 'Sudah lewat' : 'Tersedia'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           <section>

@@ -21,6 +21,17 @@ function todayInputValue() {
   return now.toISOString().slice(0, 10);
 }
 
+function isPastDate(value) {
+  return Boolean(value) && value < todayInputValue();
+}
+
+function isPastSlot(date, time) {
+  if (!date || !time || date !== todayInputValue()) return false;
+  const now = new Date();
+  const slotDate = new Date(`${date}T${time}:00`);
+  return slotDate <= now;
+}
+
 export default function Reserve({ currentUser, treatments = [], onCreateReservation }) {
   const { treatmentId } = useParams();
   const [searchParams] = useSearchParams();
@@ -54,6 +65,13 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
 
   const unavailable = useMemo(() => new Set(bookedTimes), [bookedTimes]);
 
+  const updateVisitDate = (value) => {
+    setVisitDate(isPastDate(value) ? todayInputValue() : value);
+    setVisitTime('');
+    setLoadingSlots(true);
+    setError('');
+  };
+
   if (currentUser?.role !== 'customer') {
     const target = `/reserve/${treatmentId}${consultationId ? `?consultation=${consultationId}` : ''}`;
     return <Navigate to={`/login?returnTo=${encodeURIComponent(target)}`} replace />;
@@ -75,6 +93,11 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
     event.preventDefault();
     if (!visitTime) {
       setError('Pilih salah satu jam yang masih tersedia.');
+      return;
+    }
+    if (isPastDate(visitDate) || isPastSlot(visitDate, visitTime)) {
+      setError('Tanggal atau jam yang sudah terlewati tidak dapat dipilih.');
+      setVisitTime('');
       return;
     }
 
@@ -131,12 +154,7 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
               type="date"
               min={todayInputValue()}
               value={visitDate}
-              onChange={(event) => {
-                setVisitDate(event.target.value);
-                setVisitTime('');
-                setLoadingSlots(true);
-                setError('');
-              }}
+              onChange={(event) => updateVisitDate(event.target.value)}
               required
             />
           </label>
@@ -152,17 +170,27 @@ export default function Reserve({ currentUser, treatments = [], onCreateReservat
               <div className="slot-grid">
                 {slots.map((slot) => {
                   const isBooked = unavailable.has(slot);
+                  const isExpired = isPastSlot(visitDate, slot);
+                  const isDisabled = isBooked || isExpired;
                   return (
                     <button
                       key={slot}
                       type="button"
                       className={visitTime === slot ? 'slot-button active' : 'slot-button'}
-                      disabled={isBooked}
+                      disabled={isDisabled}
                       onClick={() => setVisitTime(slot)}
-                      aria-label={isBooked ? `${slot} sudah dibooking` : `${slot} tersedia`}
+                      aria-label={
+                        isBooked
+                          ? `${slot} sudah dibooking`
+                          : isExpired
+                            ? `${slot} sudah terlewati`
+                            : `${slot} tersedia`
+                      }
                     >
                       <strong>{slot}</strong>
-                      <span>{isBooked ? 'Sudah dibooking' : 'Tersedia'}</span>
+                      <span>
+                        {isBooked ? 'Sudah dibooking' : isExpired ? 'Sudah lewat' : 'Tersedia'}
+                      </span>
                     </button>
                   );
                 })}

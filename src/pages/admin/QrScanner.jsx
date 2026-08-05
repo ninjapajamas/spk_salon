@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { BrowserQRCodeReader } from '@zxing/browser';
 import { Camera, CheckCircle2, Keyboard, QrCode, ScanLine, XCircle } from 'lucide-react';
 import AdminSidebar from '../../components/AdminSidebar';
 
 export default function QrScanner({ onLogout, onScanReservation }) {
   const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const animationRef = useRef(null);
-  const detectorRef = useRef(null);
-  const scanningRef = useRef(false);
+  const scannerRef = useRef(null);
+  const controlsRef = useRef(null);
+  const isReadingRef = useRef(false);
   const [code, setCode] = useState('');
   const [cameraMessage, setCameraMessage] = useState('');
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -15,10 +15,10 @@ export default function QrScanner({ onLogout, onScanReservation }) {
   const [result, setResult] = useState(null);
 
   const stopCamera = () => {
-    scanningRef.current = false;
-    if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    isReadingRef.current = false;
+    if (videoRef.current) videoRef.current.srcObject = null;
     setIsCameraActive(false);
   };
 
@@ -41,48 +41,35 @@ export default function QrScanner({ onLogout, onScanReservation }) {
     }
   };
 
-  const scanFrame = async () => {
-    if (!scanningRef.current || !videoRef.current || !detectorRef.current) return;
-    try {
-      if (videoRef.current.readyState >= 2) {
-        const codes = await detectorRef.current.detect(videoRef.current);
-        if (codes[0]?.rawValue) {
-          await validateCode(codes[0].rawValue);
-          return;
-        }
-      }
-    } catch {
-      setCameraMessage('QR belum terbaca. Arahkan kamera lebih dekat dan pastikan pencahayaan cukup.');
-    }
-    animationRef.current = requestAnimationFrame(scanFrame);
-  };
-
   const startCamera = async () => {
     setResult(null);
     setCameraMessage('');
-    if (!('BarcodeDetector' in window)) {
-      setCameraMessage('Browser ini belum mendukung pemindai QR. Gunakan input kode manual.');
-      return;
-    }
     try {
-      const formats = await window.BarcodeDetector.getSupportedFormats();
-      if (!formats.includes('qr_code')) {
-        setCameraMessage('Pemindaian QR tidak didukung browser ini. Gunakan input kode manual.');
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraMessage('Browser belum memberi akses kamera. Gunakan Chrome/Edge terbaru atau input manual.');
         return;
       }
-      detectorRef.current = new window.BarcodeDetector({ formats: ['qr_code'] });
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
-      streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      scanningRef.current = true;
+
+      scannerRef.current = scannerRef.current || new BrowserQRCodeReader();
       setIsCameraActive(true);
-      animationRef.current = requestAnimationFrame(scanFrame);
-    } catch {
-      setCameraMessage('Kamera tidak dapat dibuka. Izinkan akses kamera atau gunakan kode manual.');
+      controlsRef.current = await scannerRef.current.decodeFromConstraints(
+        { video: { facingMode: { ideal: 'environment' } }, audio: false },
+        videoRef.current,
+        async (scanResult, error, controls) => {
+          if (!scanResult || isReadingRef.current) return;
+          isReadingRef.current = true;
+          controls.stop();
+          controlsRef.current = null;
+          await validateCode(scanResult.getText());
+        }
+      );
+    } catch (error) {
+      const permissionDenied = error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError';
+      setCameraMessage(
+        permissionDenied
+          ? 'Akses kamera ditolak. Izinkan kamera di browser, lalu aktifkan lagi.'
+          : 'Kamera tidak dapat dibuka. Pastikan halaman memakai localhost/HTTPS atau gunakan kode manual.'
+      );
       stopCamera();
     }
   };

@@ -130,31 +130,34 @@ export default function Recommendations({ consultation, treatments = [], current
               </div>
             )}
 
-            {results.length > 1 && (
+            {results.length > 0 && (
               <section>
                 <div className="section-heading compact">
                   <div>
-                    <p className="eyebrow">Alternatif</p>
-                    <h2>Pilihan Lain yang Relevan</h2>
+                    <p className="eyebrow">Urutan perhitungan</p>
+                    <h2>Semua Perawatan Berdasarkan Skor Rekomendasi</h2>
                   </div>
                 </div>
 
                 <div className="alternative-grid">
                   {results
-                    .filter((item) => item.id !== selectedTreatment?.id)
-                    .slice(0, 3)
-                    .map((treatment) => (
+                    .map((treatment, index) => (
                       <article key={treatment.id} className="alternative-card">
                         <img src={treatment.image} alt={treatment.name} />
                         <div>
+                          <span className={index === 0 ? 'badge rose' : 'badge gold'}>
+                            Peringkat {index + 1} - {treatment.matchPercentage}%
+                          </span>
                           <h3>{treatment.name}</h3>
                           <p>{treatment.description}</p>
+                          <p className="reason-box">{treatment.reason}</p>
                           <div className="treatment-meta small">
                             <strong>{currency.format(treatment.price)}</strong>
                             <span>
                               <Clock size={15} />
                               {treatment.duration} menit
                             </span>
+                            <span>{treatment.suitabilityLabel}</span>
                           </div>
                           <Link className="btn-secondary" to={reservationPath(treatment.id)}>
                             Reservasi Treatment Ini
